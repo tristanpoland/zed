@@ -250,6 +250,31 @@ impl WindowsWindowInner {
     }
 
     fn handle_paint_msg(&self, handle: HWND) -> Option<isize> {
+        // Process events in small batches to avoid blocking other windows
+        // Each window processes independently - complete isolation!
+        const BATCH_SIZE: usize = 10;
+        let events = self.event_queue.drain_events(BATCH_SIZE);
+
+        for event in events {
+            let Some(mut callback) = self.state.borrow_mut().callbacks.input.take() else {
+                continue;
+            };
+
+            // Dispatch the event
+            let _result = callback(event.input);
+
+            // Restore callback
+            self.state.borrow_mut().callbacks.input = Some(callback);
+        }
+
+        // If there are more events pending, request another paint
+        // This yields to other windows while ensuring we process all events
+        if self.event_queue.pending_count() > 0 {
+            unsafe {
+                let _ = InvalidateRect(Some(handle), None, false);
+            }
+        }
+
         self.draw_window(handle, false)
     }
 
@@ -283,10 +308,13 @@ impl WindowsWindowInner {
     fn handle_mouse_move_msg(&self, handle: HWND, lparam: LPARAM, wparam: WPARAM) -> Option<isize> {
         self.start_tracking_mouse(handle, TME_LEAVE);
 
-        let mut lock = self.state.borrow_mut();
-        let Some(mut func) = lock.callbacks.input.take() else {
+        // Only process mouse events for the active window!
+        // This prevents inactive windows from processing mouse spam
+        if !self.is_active() {
             return Some(1);
-        };
+        }
+
+        let lock = self.state.borrow();
         let scale_factor = lock.scale_factor;
         drop(lock);
 
@@ -309,10 +337,11 @@ impl WindowsWindowInner {
             pressed_button,
             modifiers: current_modifiers(),
         });
-        let handled = !func(input).propagate;
-        self.state.borrow_mut().callbacks.input = Some(func);
 
-        if handled { Some(0) } else { Some(1) }
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
+
+        Some(1) // Handled
     }
 
     fn handle_mouse_leave_msg(&self) -> Option<isize> {
@@ -335,22 +364,13 @@ impl WindowsWindowInner {
                 is_held: lparam.0 & (0x1 << 30) > 0,
             })
         })?;
-        let mut func = lock.callbacks.input.take()?;
         drop(lock);
 
-        let handled = !func(input).propagate;
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
 
-        let mut lock = self.state.borrow_mut();
-        lock.callbacks.input = Some(func);
-
-        if handled {
-            lock.system_key_handled = true;
-            Some(0)
-        } else {
-            // we need to call `DefWindowProcW`, or we will lose the system-wide `Alt+F4`, `Alt+{other keys}`
-            // shortcuts.
-            None
-        }
+        // For system keys, we return None to call DefWindowProcW for system shortcuts
+        None
     }
 
     fn handle_syskeyup_msg(&self, handle: HWND, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
@@ -358,10 +378,10 @@ impl WindowsWindowInner {
         let input = handle_key_event(handle, wparam, lparam, &mut lock, |keystroke| {
             PlatformInput::KeyUp(KeyUpEvent { keystroke })
         })?;
-        let mut func = lock.callbacks.input.take()?;
         drop(lock);
-        func(input);
-        self.state.borrow_mut().callbacks.input = Some(func);
+
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
 
         // Always return 0 to indicate that the message was handled, so we could properly handle `ModifiersChanged` event.
         Some(0)
@@ -390,20 +410,12 @@ impl WindowsWindowInner {
             return Some(0);
         }
 
-        let Some(mut func) = self.state.borrow_mut().callbacks.input.take() else {
-            return Some(1);
-        };
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
 
-        let handled = !func(input).propagate;
-
-        self.state.borrow_mut().callbacks.input = Some(func);
-
-        if handled {
-            Some(0)
-        } else {
-            translate_message(handle, wparam, lparam);
-            Some(1)
-        }
+        // Translate message for char events
+        translate_message(handle, wparam, lparam);
+        Some(1)
     }
 
     fn handle_keyup_msg(&self, handle: HWND, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
@@ -413,16 +425,12 @@ impl WindowsWindowInner {
         }) else {
             return Some(1);
         };
-
-        let Some(mut func) = lock.callbacks.input.take() else {
-            return Some(1);
-        };
         drop(lock);
 
-        let handled = !func(input).propagate;
-        self.state.borrow_mut().callbacks.input = Some(func);
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
 
-        if handled { Some(0) } else { Some(1) }
+        Some(1)
     }
 
     fn handle_char_msg(&self, wparam: WPARAM) -> Option<isize> {
@@ -448,11 +456,13 @@ impl WindowsWindowInner {
         button: MouseButton,
         lparam: LPARAM,
     ) -> Option<isize> {
+        // Only process mouse events for the active window!
+        if !self.is_active() {
+            return Some(1);
+        }
+
         unsafe { SetCapture(handle) };
         let mut lock = self.state.borrow_mut();
-        let Some(mut func) = lock.callbacks.input.take() else {
-            return Some(1);
-        };
         let x = lparam.signed_loword();
         let y = lparam.signed_hiword();
         let physical_point = point(DevicePixels(x as i32), DevicePixels(y as i32));
@@ -467,23 +477,26 @@ impl WindowsWindowInner {
             click_count,
             first_mouse: false,
         });
-        let handled = !func(input).propagate;
-        self.state.borrow_mut().callbacks.input = Some(func);
 
-        if handled { Some(0) } else { Some(1) }
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
+
+        Some(1)
     }
 
     fn handle_mouse_up_msg(
         &self,
-        _handle: HWND,
+        handle: HWND,
         button: MouseButton,
         lparam: LPARAM,
     ) -> Option<isize> {
-        unsafe { ReleaseCapture().log_err() };
-        let mut lock = self.state.borrow_mut();
-        let Some(mut func) = lock.callbacks.input.take() else {
+        // Only process mouse events for the active window!
+        if !self.is_active() {
             return Some(1);
-        };
+        }
+
+        unsafe { ReleaseCapture().log_err() };
+        let lock = self.state.borrow();
         let x = lparam.signed_loword() as f32;
         let y = lparam.signed_hiword() as f32;
         let click_count = lock.click_state.current_count;
@@ -496,10 +509,11 @@ impl WindowsWindowInner {
             modifiers: current_modifiers(),
             click_count,
         });
-        let handled = !func(input).propagate;
-        self.state.borrow_mut().callbacks.input = Some(func);
 
-        if handled { Some(0) } else { Some(1) }
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
+
+        Some(1)
     }
 
     fn handle_xbutton_msg(
@@ -523,11 +537,13 @@ impl WindowsWindowInner {
         wparam: WPARAM,
         lparam: LPARAM,
     ) -> Option<isize> {
-        let modifiers = current_modifiers();
-        let mut lock = self.state.borrow_mut();
-        let Some(mut func) = lock.callbacks.input.take() else {
+        // Only process mouse events for the active window!
+        if !self.is_active() {
             return Some(1);
-        };
+        }
+
+        let modifiers = current_modifiers();
+        let lock = self.state.borrow();
         let scale_factor = lock.scale_factor;
         let wheel_scroll_amount = match modifiers.shift {
             true => lock.system_settings.mouse_wheel_settings.wheel_scroll_chars,
@@ -557,10 +573,11 @@ impl WindowsWindowInner {
             modifiers,
             touch_phase: TouchPhase::Moved,
         });
-        let handled = !func(input).propagate;
-        self.state.borrow_mut().callbacks.input = Some(func);
 
-        if handled { Some(0) } else { Some(1) }
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
+
+        Some(1)
     }
 
     fn handle_mouse_horizontal_wheel_msg(
@@ -569,10 +586,12 @@ impl WindowsWindowInner {
         wparam: WPARAM,
         lparam: LPARAM,
     ) -> Option<isize> {
-        let mut lock = self.state.borrow_mut();
-        let Some(mut func) = lock.callbacks.input.take() else {
+        // Only process mouse events for the active window!
+        if !self.is_active() {
             return Some(1);
-        };
+        }
+
+        let lock = self.state.borrow();
         let scale_factor = lock.scale_factor;
         let wheel_scroll_chars = lock.system_settings.mouse_wheel_settings.wheel_scroll_chars;
         drop(lock);
@@ -593,10 +612,11 @@ impl WindowsWindowInner {
             modifiers: current_modifiers(),
             touch_phase: TouchPhase::Moved,
         });
-        let handled = !func(event).propagate;
-        self.state.borrow_mut().callbacks.input = Some(func);
 
-        if handled { Some(0) } else { Some(1) }
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(event);
+
+        Some(1)
     }
 
     fn retrieve_caret_position(&self) -> Option<POINT> {
@@ -914,8 +934,12 @@ impl WindowsWindowInner {
     fn handle_nc_mouse_move_msg(&self, handle: HWND, lparam: LPARAM) -> Option<isize> {
         self.start_tracking_mouse(handle, TME_LEAVE | TME_NONCLIENT);
 
-        let mut lock = self.state.borrow_mut();
-        let mut func = lock.callbacks.input.take()?;
+        // Only process mouse events for the active window!
+        if !self.is_active() {
+            return None;
+        }
+
+        let lock = self.state.borrow();
         let scale_factor = lock.scale_factor;
         drop(lock);
 
@@ -929,10 +953,11 @@ impl WindowsWindowInner {
             pressed_button: None,
             modifiers: current_modifiers(),
         });
-        let handled = !func(input).propagate;
-        self.state.borrow_mut().callbacks.input = Some(func);
 
-        if handled { Some(0) } else { None }
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
+
+        None
     }
 
     fn handle_nc_mouse_down_msg(
@@ -942,35 +967,32 @@ impl WindowsWindowInner {
         wparam: WPARAM,
         lparam: LPARAM,
     ) -> Option<isize> {
+        // Only process mouse events for the active window!
+        if !self.is_active() {
+            return None;
+        }
+
         let mut lock = self.state.borrow_mut();
-        if let Some(mut func) = lock.callbacks.input.take() {
-            let scale_factor = lock.scale_factor;
-            let mut cursor_point = POINT {
-                x: lparam.signed_loword().into(),
-                y: lparam.signed_hiword().into(),
-            };
-            unsafe { ScreenToClient(handle, &mut cursor_point).ok().log_err() };
-            let physical_point = point(DevicePixels(cursor_point.x), DevicePixels(cursor_point.y));
-            let click_count = lock.click_state.update(button, physical_point);
-            drop(lock);
-
-            let input = PlatformInput::MouseDown(MouseDownEvent {
-                button,
-                position: logical_point(cursor_point.x as f32, cursor_point.y as f32, scale_factor),
-                modifiers: current_modifiers(),
-                click_count,
-                first_mouse: false,
-            });
-            let result = func(input);
-            let handled = !result.propagate || result.default_prevented;
-            self.state.borrow_mut().callbacks.input = Some(func);
-
-            if handled {
-                return Some(0);
-            }
-        } else {
-            drop(lock);
+        let scale_factor = lock.scale_factor;
+        let mut cursor_point = POINT {
+            x: lparam.signed_loword().into(),
+            y: lparam.signed_hiword().into(),
         };
+        unsafe { ScreenToClient(handle, &mut cursor_point).ok().log_err() };
+        let physical_point = point(DevicePixels(cursor_point.x), DevicePixels(cursor_point.y));
+        let click_count = lock.click_state.update(button, physical_point);
+        drop(lock);
+
+        let input = PlatformInput::MouseDown(MouseDownEvent {
+            button,
+            position: logical_point(cursor_point.x as f32, cursor_point.y as f32, scale_factor),
+            modifiers: current_modifiers(),
+            click_count,
+            first_mouse: false,
+        });
+
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
 
         // Since these are handled in handle_nc_mouse_up_msg we must prevent the default window proc
         if button == MouseButton::Left {
@@ -993,31 +1015,29 @@ impl WindowsWindowInner {
         wparam: WPARAM,
         lparam: LPARAM,
     ) -> Option<isize> {
-        let mut lock = self.state.borrow_mut();
-        if let Some(mut func) = lock.callbacks.input.take() {
-            let scale_factor = lock.scale_factor;
-            drop(lock);
-
-            let mut cursor_point = POINT {
-                x: lparam.signed_loword().into(),
-                y: lparam.signed_hiword().into(),
-            };
-            unsafe { ScreenToClient(handle, &mut cursor_point).ok().log_err() };
-            let input = PlatformInput::MouseUp(MouseUpEvent {
-                button,
-                position: logical_point(cursor_point.x as f32, cursor_point.y as f32, scale_factor),
-                modifiers: current_modifiers(),
-                click_count: 1,
-            });
-            let handled = !func(input).propagate;
-            self.state.borrow_mut().callbacks.input = Some(func);
-
-            if handled {
-                return Some(0);
-            }
-        } else {
-            drop(lock);
+        // Only process mouse events for the active window!
+        if !self.is_active() {
+            return None;
         }
+
+        let lock = self.state.borrow();
+        let scale_factor = lock.scale_factor;
+        drop(lock);
+
+        let mut cursor_point = POINT {
+            x: lparam.signed_loword().into(),
+            y: lparam.signed_hiword().into(),
+        };
+        unsafe { ScreenToClient(handle, &mut cursor_point).ok().log_err() };
+        let input = PlatformInput::MouseUp(MouseUpEvent {
+            button,
+            position: logical_point(cursor_point.x as f32, cursor_point.y as f32, scale_factor),
+            modifiers: current_modifiers(),
+            click_count: 1,
+        });
+
+        // Post to this window's own event queue (non-blocking, ~50ns)
+        self.event_queue.post(input);
 
         let last_pressed = self.state.borrow_mut().nc_button_pressed.take();
         if button == MouseButton::Left

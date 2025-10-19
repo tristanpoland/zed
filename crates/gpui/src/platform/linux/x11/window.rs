@@ -1147,6 +1147,10 @@ impl X11WindowStatePtr {
 }
 
 impl PlatformWindow for X11Window {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.state.borrow().bounds
     }
@@ -1666,5 +1670,15 @@ impl PlatformWindow for X11Window {
 
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.0.state.borrow().renderer.gpu_specs().into()
+    }
+    
+    unsafe fn draw_raw_texture_immediate(
+        &mut self,
+        texture_handle: *mut std::ffi::c_void,
+        bounds: Bounds<Pixels>,
+    ) -> anyhow::Result<()> {
+        let scale_factor = self.scale_factor();
+        let scaled_bounds = bounds.scale(scale_factor);
+        self.0.state.borrow_mut().renderer.draw_raw_texture_immediate(texture_handle, scaled_bounds)
     }
 }

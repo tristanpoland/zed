@@ -112,6 +112,10 @@ impl TestWindow {
 }
 
 impl PlatformWindow for TestWindow {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.lock().bounds
     }
@@ -294,6 +298,14 @@ impl PlatformWindow for TestWindow {
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         None
     }
+    
+    unsafe fn draw_raw_texture_immediate(
+        &mut self,
+        _texture_handle: *mut std::ffi::c_void,
+        _bounds: Bounds<Pixels>,
+    ) -> anyhow::Result<()> {
+        Ok(())  // No-op for tests
+    }
 }
 
 pub(crate) struct TestAtlasState {
@@ -358,5 +370,9 @@ impl PlatformAtlas for TestAtlas {
     fn remove(&self, key: &AtlasKey) {
         let mut state = self.0.lock();
         state.tiles.remove(key);
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

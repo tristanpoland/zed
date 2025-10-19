@@ -3,7 +3,7 @@
 
 use super::{BladeAtlas, BladeContext};
 use crate::{
-    Background, Bounds, DevicePixels, GpuSpecs, MonochromeSprite, Path, Point, PolychromeSprite,
+    Background, Bounds, ContentMask, Corners, DevicePixels, GpuSpecs, MonochromeSprite, Path, Point, PolychromeSprite,
     PrimitiveBatch, Quad, ScaledPixels, Scene, Shadow, Size, Underline,
 };
 use blade_graphics as gpu;
@@ -107,6 +107,14 @@ struct ShaderSurfacesData {
     s_surface: gpu::Sampler,
 }
 
+#[derive(blade_macros::ShaderData)]
+struct ShaderExternalTexturesData {
+    globals: GlobalParams,
+    t_texture: gpu::TextureView,
+    s_texture: gpu::Sampler,
+    b_external_textures: gpu::BufferPiece,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[repr(C)]
 struct PathSprite {
@@ -131,6 +139,7 @@ struct BladePipelines {
     mono_sprites: gpu::RenderPipeline,
     poly_sprites: gpu::RenderPipeline,
     surfaces: gpu::RenderPipeline,
+    external_textures: gpu::RenderPipeline,
 }
 
 impl BladePipelines {
@@ -150,6 +159,7 @@ impl BladePipelines {
         shader.check_struct_size::<Shadow>();
         shader.check_struct_size::<PathRasterizationVertex>();
         shader.check_struct_size::<PathSprite>();
+        shader.check_struct_size::<crate::ExternalTexture>();
         shader.check_struct_size::<Underline>();
         shader.check_struct_size::<MonochromeSprite>();
         shader.check_struct_size::<PolychromeSprite>();
@@ -300,6 +310,20 @@ impl BladePipelines {
                 color_targets,
                 multisample_state: gpu::MultisampleState::default(),
             }),
+            external_textures: gpu.create_render_pipeline(gpu::RenderPipelineDesc {
+                name: "external-textures",
+                data_layouts: &[&ShaderExternalTexturesData::layout()],
+                vertex: shader.at("vs_external_texture"),
+                vertex_fetches: &[],
+                primitive: gpu::PrimitiveState {
+                    topology: gpu::PrimitiveTopology::TriangleStrip,
+                    ..Default::default()
+                },
+                depth_stencil: None,
+                fragment: Some(shader.at("fs_external_texture")),
+                color_targets,
+                multisample_state: gpu::MultisampleState::default(),
+            }),
         }
     }
 
@@ -312,6 +336,7 @@ impl BladePipelines {
         gpu.destroy_render_pipeline(&mut self.mono_sprites);
         gpu.destroy_render_pipeline(&mut self.poly_sprites);
         gpu.destroy_render_pipeline(&mut self.surfaces);
+        gpu.destroy_render_pipeline(&mut self.external_textures);
     }
 }
 
@@ -902,6 +927,25 @@ impl BladeRenderer {
                         }
                     }
                 }
+                PrimitiveBatch::ExternalTextures {
+                    texture_id,
+                    textures,
+                } => {
+                    let tex_info = self.atlas.get_external_texture_info(texture_id);
+                    let instance_buf =
+                        unsafe { self.instance_belt.alloc_typed(textures, &self.gpu) };
+                    let mut encoder = pass.with(&self.pipelines.external_textures);
+                    encoder.bind(
+                        0,
+                        &ShaderExternalTexturesData {
+                            globals,
+                            t_texture: tex_info.raw_view,
+                            s_texture: self.atlas_sampler,
+                            b_external_textures: instance_buf,
+                        },
+                    );
+                    encoder.draw(0, 4, 0, textures.len() as u32);
+                }
             }
         }
         drop(pass);
@@ -915,6 +959,104 @@ impl BladeRenderer {
 
         self.wait_for_gpu();
         self.last_sync_point = Some(sync_point);
+    }
+    
+    /// IMMEDIATE MODE: Draw a raw Vulkan/GPU texture pointer directly
+    /// This bypasses the scene graph and atlas for maximum performance
+    /// Used for game viewports that need instant, non-retained rendering
+    pub fn draw_raw_texture_immediate(
+        &mut self,
+        texture_view_ptr: *mut std::ffi::c_void,
+        bounds: Bounds<ScaledPixels>,
+    ) -> anyhow::Result<()> {
+        if texture_view_ptr.is_null() {
+            return Ok(());
+        }
+
+        // Cast to Blade TextureView
+        // SAFETY: The caller guarantees this is a valid gpu::TextureView pointer
+        let texture_view = unsafe { 
+            *(texture_view_ptr as *const gpu::TextureView) 
+        };
+
+        // Acquire frame
+        let frame = self
+            .surface
+            .acquire_frame()
+            .ok_or_else(|| anyhow::anyhow!("No frame available"))?;
+
+        // Start command encoder
+        let mut encoder = self.context.command_encoder_for_rendering()?;
+
+        // Create global params
+        let viewport_size = Size {
+            width: ScaledPixels(self.config.size.width as f32),
+            height: ScaledPixels(self.config.size.height as f32),
+        };
+        let globals = GlobalParams {
+            viewport_size: viewport_size.map(|v| v.0),
+        };
+
+        // Create external texture instance
+        let external_texture = crate::ExternalTexture {
+            order: 0,
+            pad: 0,
+            bounds,
+            content_mask: ContentMask::default(),
+            corner_radii: Corners::default(),
+            opacity: 1.0,
+            grayscale: false,
+            texture_id: crate::ExternalTextureId(0),
+        };
+
+        // Allocate instance buffer
+        let instance_buf = self
+            .instance_belt
+            .alloc_data(&[external_texture], &mut encoder, "external_texture_immediate");
+
+        // Set up render pass
+        let render_pass = encoder.render(
+            gpu::RenderTargetSet {
+                colors: &[gpu::RenderTarget {
+                    view: frame.texture_view(),
+                    init_op: gpu::InitOp::Load,
+                    finish_op: gpu::FinishOp::Store,
+                }],
+                depth_stencil: None,
+            },
+            "immediate_external_texture",
+        );
+
+        // Bind pipeline and draw
+        let data = ShaderExternalTexturesData {
+            globals,
+            t_texture: texture_view,
+            s_texture: self.atlas_sampler,
+            b_external_textures: instance_buf,
+        };
+
+        render_pass.set_pipeline(&self.pipelines.external_textures);
+        render_pass.set_scissor_rect(&gpu::ScissorRect {
+            x: 0,
+            y: 0,
+            w: self.config.size.width as i32,
+            h: self.config.size.height as i32,
+        });
+        render_pass.set_data(0, &data, &self.context.gpu);
+        render_pass.draw(0, 4, 0, 1);
+
+        drop(render_pass);
+        drop(instance_buf);
+
+        // Submit and present
+        let sync_point = self
+            .context
+            .gpu
+            .submit(&mut encoder, &[], gpu::SyncPoint::empty());
+        self.surface.present(frame, sync_point);
+
+        self.wait_for_gpu();
+        Ok(())
     }
 }
 

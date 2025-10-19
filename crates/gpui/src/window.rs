@@ -5,18 +5,19 @@ use crate::{
     AsyncWindowContext, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow, Capslock,
     Context, Corners, CursorStyle, Decorations, DevicePixels, DispatchActionListener,
     DispatchNodeId, DispatchTree, DisplayId, Edges, Effect, Entity, EntityId, EventEmitter,
-    FileDropEvent, FontId, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla, InputHandler, IsZero,
-    KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId,
-    LineLayoutIndex, Modifiers, ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent,
-    MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, PromptButton, PromptLevel, Quad,
-    Render, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge,
-    SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow,
-    SharedString, Size, StrikethroughStyle, Style, SubscriberSet, Subscription, SystemWindowTab,
-    SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task, TextStyle, TextStyleRefinement,
-    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
-    WindowBounds, WindowControls, WindowDecorations, WindowOptions, WindowParams, WindowTextSystem,
-    point, prelude::*, px, rems, size, transparent_black,
+    ExternalTextureId, FileDropEvent, FontId, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla,
+    InputHandler, IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent,
+    LayoutId, LineLayoutIndex, Modifiers, ModifiersChangedEvent, MonochromeSprite, MouseButton,
+    MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAtlas, PlatformDisplay,
+    PlatformInput, PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, PromptButton,
+    PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams,
+    Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y,
+    ScaledPixels, Scene, Shadow, SharedString, Size, StrikethroughStyle, Style, SubscriberSet,
+    Subscription, SystemWindowTab, SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task,
+    TextStyle, TextStyleRefinement, TransformationMatrix, Underline, UnderlineStyle,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
+    WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems, size,
+    transparent_black,
 };
 use anyhow::{Context as _, Result, anyhow};
 use collections::{FxHashMap, FxHashSet};
@@ -1717,6 +1718,26 @@ impl Window {
         self.viewport_size
     }
 
+    /// IMMEDIATE MODE: Draw a raw GPU texture pointer directly
+    /// This bypasses the scene graph and atlas for maximum performance
+    /// Used for game viewports that need instant, non-retained rendering
+    /// 
+    /// Platform notes:
+    /// - Windows: texture_handle should be ID3D11ShaderResourceView*
+    /// - macOS: texture_handle should be MTLTexture*
+    /// - Linux: texture_handle should be VkImageView
+    /// 
+    /// # Safety
+    /// The caller must ensure that `texture_handle` is a valid platform-specific
+    /// GPU texture pointer for the lifetime of this frame.
+    pub unsafe fn draw_raw_texture_immediate(
+        &mut self,
+        texture_handle: *mut std::ffi::c_void,
+        bounds: Bounds<Pixels>,
+    ) -> anyhow::Result<()> {
+        self.platform_window.as_mut().draw_raw_texture_immediate(texture_handle, bounds)
+    }
+
     /// Returns whether this window is focused by the operating system (receiving key events).
     pub fn is_window_active(&self) -> bool {
         self.active.get()
@@ -3174,6 +3195,33 @@ impl Window {
         Ok(())
     }
 
+    /// Paint an external GPU texture into the scene for the next frame at the current z-index.
+    ///
+    /// This method should only be called as part of the paint phase of element drawing.
+    pub fn paint_external_texture(
+        &mut self,
+        bounds: Bounds<ScaledPixels>,
+        corner_radii: Corners<ScaledPixels>,
+        texture_id: ExternalTextureId,
+    ) {
+        self.invalidator.debug_assert_paint();
+
+        let scale_factor = self.scale_factor();
+        let content_mask = self.content_mask().scale(scale_factor);
+        let opacity = self.element_opacity();
+
+        self.next_frame.scene.push_external_texture(crate::ExternalTexture {
+            order: 0,
+            pad: 0,
+            bounds,
+            content_mask,
+            corner_radii,
+            opacity,
+            grayscale: false,
+            texture_id,
+        });
+    }
+
     /// Paint a surface into the scene for the next frame at the current z-index.
     ///
     /// This method should only be called as part of the paint phase of element drawing.
@@ -3206,6 +3254,73 @@ impl Window {
         }
 
         Ok(())
+    }
+
+    /// Register an external GPU texture for zero-copy rendering.
+    /// Returns a texture ID that can be used with paint_external_texture.
+    /// 
+    /// The texture is double-buffered with CPU-mappable staging memory for optimal performance.
+    #[cfg(target_os = "windows")]
+    pub fn register_external_texture(
+        &mut self,
+        size: Size<DevicePixels>,
+    ) -> Result<ExternalTextureId> {
+        use ::windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
+        use crate::platform::DirectXAtlas;
+        
+        // Downcast to DirectXAtlas to access platform-specific methods
+        let atlas = self.sprite_atlas.clone();
+        if let Some(dx_atlas) = atlas.as_any().downcast_ref::<DirectXAtlas>() {
+            dx_atlas.register_external_texture(size, DXGI_FORMAT_B8G8R8A8_UNORM)
+                .map_err(|e| anyhow::anyhow!("Failed to register external texture: {}", e))
+        } else {
+            Err(anyhow::anyhow!("Platform does not support external textures"))
+        }
+    }
+
+    /// Update an external texture with new pixel data.
+    /// This is a ZERO-COPY operation - data is written directly to GPU-mapped memory.
+    ///
+    /// The provided closure receives a mutable slice to write pixel data.
+    /// The slice is guaranteed to be the correct size for the texture.
+    #[cfg(target_os = "windows")]
+    pub fn update_external_texture<F>(&mut self, texture_id: ExternalTextureId, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut [u8]),
+    {
+        use crate::platform::DirectXAtlas;
+        
+        let atlas = self.sprite_atlas.clone();
+        if let Some(dx_atlas) = atlas.as_any().downcast_ref::<DirectXAtlas>() {
+            // Map the texture (unsafe, but we encapsulate it)
+            unsafe {
+                let buffer = dx_atlas.map_external_texture(texture_id)
+                    .map_err(|e| anyhow::anyhow!("Failed to map external texture: {}", e))?;
+                
+                // Call user function to write data
+                f(buffer);
+                
+                // Unmap and swap buffers
+                dx_atlas.unmap_external_texture(texture_id)
+                    .map_err(|e| anyhow::anyhow!("Failed to unmap external texture: {}", e))?;
+                dx_atlas.swap_external_texture_buffers(texture_id)
+                    .map_err(|e| anyhow::anyhow!("Failed to swap texture buffers: {}", e))?;
+            }
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Platform does not support external textures"))
+        }
+    }
+
+    /// Unregister an external texture and free its resources.
+    #[cfg(target_os = "windows")]
+    pub fn unregister_external_texture(&mut self, texture_id: ExternalTextureId) {
+        use crate::platform::DirectXAtlas;
+        
+        let atlas = self.sprite_atlas.clone();
+        if let Some(dx_atlas) = atlas.as_any().downcast_ref::<DirectXAtlas>() {
+            dx_atlas.unregister_external_texture(texture_id);
+        }
     }
 
     /// Add a node to the layout tree for the current frame. Takes the `Style` of the element for which

@@ -8,6 +8,18 @@ use crate::{
     AtlasTextureId, AtlasTile, Background, Bounds, ContentMask, Corners, Edges, Hsla, Pixels,
     Point, Radians, ScaledPixels, Size, bounds_tree::BoundsTree, point,
 };
+
+/// Unique identifier for an external GPU texture (not in atlas)
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct ExternalTextureId(pub u64);
+
+impl ExternalTextureId {
+    /// Create a new external texture ID (primarily for testing)
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
+}
 use std::{
     fmt::Debug,
     iter::Peekable,
@@ -32,6 +44,7 @@ pub(crate) struct Scene {
     pub(crate) monochrome_sprites: Vec<MonochromeSprite>,
     pub(crate) polychrome_sprites: Vec<PolychromeSprite>,
     pub(crate) surfaces: Vec<PaintSurface>,
+    pub(crate) external_textures: Vec<ExternalTexture>,
 }
 
 impl Scene {
@@ -46,6 +59,7 @@ impl Scene {
         self.monochrome_sprites.clear();
         self.polychrome_sprites.clear();
         self.surfaces.clear();
+        self.external_textures.clear();
     }
 
     pub fn len(&self) -> usize {
@@ -62,6 +76,26 @@ impl Scene {
     pub fn pop_layer(&mut self) {
         self.layer_stack.pop();
         self.paint_operations.push(PaintOperation::EndLayer);
+    }
+
+    /// Push an external texture primitive into the scene
+    pub fn push_external_texture(&mut self, mut external_texture: ExternalTexture) {
+        let clipped_bounds = external_texture
+            .bounds
+            .intersect(&external_texture.content_mask.bounds);
+
+        if clipped_bounds.is_empty() {
+            return;
+        }
+
+        let order = self
+            .layer_stack
+            .last()
+            .copied()
+            .unwrap_or_else(|| self.primitive_bounds.insert(clipped_bounds));
+
+        external_texture.order = order;
+        self.external_textures.push(external_texture);
     }
 
     pub fn insert_primitive(&mut self, primitive: impl Into<Primitive>) {
@@ -109,6 +143,10 @@ impl Scene {
                 surface.order = order;
                 self.surfaces.push(surface.clone());
             }
+            Primitive::ExternalTexture(texture) => {
+                texture.order = order;
+                self.external_textures.push(texture.clone());
+            }
         }
         self.paint_operations
             .push(PaintOperation::Primitive(primitive));
@@ -134,6 +172,7 @@ impl Scene {
         self.polychrome_sprites
             .sort_by_key(|sprite| (sprite.order, sprite.tile.tile_id));
         self.surfaces.sort_by_key(|surface| surface.order);
+        self.external_textures.sort_by_key(|texture| texture.order);
     }
 
     #[cfg_attr(
@@ -166,6 +205,9 @@ impl Scene {
             surfaces: &self.surfaces,
             surfaces_start: 0,
             surfaces_iter: self.surfaces.iter().peekable(),
+            external_textures: &self.external_textures,
+            external_textures_start: 0,
+            external_textures_iter: self.external_textures.iter().peekable(),
         }
     }
 }
@@ -187,6 +229,7 @@ pub(crate) enum PrimitiveKind {
     MonochromeSprite,
     PolychromeSprite,
     Surface,
+    ExternalTexture,
 }
 
 pub(crate) enum PaintOperation {
@@ -204,6 +247,7 @@ pub(crate) enum Primitive {
     MonochromeSprite(MonochromeSprite),
     PolychromeSprite(PolychromeSprite),
     Surface(PaintSurface),
+    ExternalTexture(ExternalTexture),
 }
 
 impl Primitive {
@@ -216,6 +260,7 @@ impl Primitive {
             Primitive::MonochromeSprite(sprite) => &sprite.bounds,
             Primitive::PolychromeSprite(sprite) => &sprite.bounds,
             Primitive::Surface(surface) => &surface.bounds,
+            Primitive::ExternalTexture(texture) => &texture.bounds,
         }
     }
 
@@ -228,6 +273,7 @@ impl Primitive {
             Primitive::MonochromeSprite(sprite) => &sprite.content_mask,
             Primitive::PolychromeSprite(sprite) => &sprite.content_mask,
             Primitive::Surface(surface) => &surface.content_mask,
+            Primitive::ExternalTexture(texture) => &texture.content_mask,
         }
     }
 }
@@ -261,6 +307,9 @@ struct BatchIterator<'a> {
     surfaces: &'a [PaintSurface],
     surfaces_start: usize,
     surfaces_iter: Peekable<slice::Iter<'a, PaintSurface>>,
+    external_textures: &'a [ExternalTexture],
+    external_textures_start: usize,
+    external_textures_iter: Peekable<slice::Iter<'a, ExternalTexture>>,
 }
 
 impl<'a> Iterator for BatchIterator<'a> {
@@ -289,6 +338,10 @@ impl<'a> Iterator for BatchIterator<'a> {
             (
                 self.surfaces_iter.peek().map(|s| s.order),
                 PrimitiveKind::Surface,
+            ),
+            (
+                self.external_textures_iter.peek().map(|t| t.order),
+                PrimitiveKind::ExternalTexture,
             ),
         ];
         orders_and_kinds.sort_by_key(|(order, kind)| (order.unwrap_or(u32::MAX), *kind));
@@ -420,6 +473,27 @@ impl<'a> Iterator for BatchIterator<'a> {
                     &self.surfaces[surfaces_start..surfaces_end],
                 ))
             }
+            PrimitiveKind::ExternalTexture => {
+                let texture_id = self.external_textures_iter.peek().unwrap().texture_id;
+                let textures_start = self.external_textures_start;
+                let mut textures_end = self.external_textures_start + 1;
+                self.external_textures_iter.next();
+                while self
+                    .external_textures_iter
+                    .next_if(|texture| {
+                        (texture.order, batch_kind) < max_order_and_kind
+                            && texture.texture_id == texture_id
+                    })
+                    .is_some()
+                {
+                    textures_end += 1;
+                }
+                self.external_textures_start = textures_end;
+                Some(PrimitiveBatch::ExternalTextures {
+                    texture_id,
+                    textures: &self.external_textures[textures_start..textures_end],
+                })
+            }
         }
     }
 }
@@ -446,6 +520,10 @@ pub(crate) enum PrimitiveBatch<'a> {
         sprites: &'a [PolychromeSprite],
     },
     Surfaces(&'a [PaintSurface]),
+    ExternalTextures {
+        texture_id: ExternalTextureId,
+        textures: &'a [ExternalTexture],
+    },
 }
 
 #[derive(Default, Debug, Clone)]
@@ -665,6 +743,27 @@ pub(crate) struct PaintSurface {
 impl From<PaintSurface> for Primitive {
     fn from(surface: PaintSurface) -> Self {
         Primitive::Surface(surface)
+    }
+}
+
+/// An external GPU texture that is managed outside of the atlas system.
+/// Used for texture canvases and other dynamically updated content.
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub(crate) struct ExternalTexture {
+    pub order: DrawOrder,
+    pub pad: u32, // align to 8 bytes
+    pub opacity: f32,
+    pub grayscale: bool,
+    pub bounds: Bounds<ScaledPixels>,
+    pub content_mask: ContentMask<ScaledPixels>,
+    pub corner_radii: Corners<ScaledPixels>,
+    pub texture_id: ExternalTextureId,
+}
+
+impl From<ExternalTexture> for Primitive {
+    fn from(texture: ExternalTexture) -> Self {
+        Primitive::ExternalTexture(texture)
     }
 }
 

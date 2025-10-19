@@ -4,7 +4,7 @@ use crate::{
     Path, Point, PolychromeSprite, PrimitiveBatch, Quad, ScaledPixels, Scene, Shadow, Size,
     Surface, Underline, point, size,
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use block::ConcreteBlock;
 use cocoa::{
     base::{NO, YES},
@@ -108,6 +108,7 @@ pub(crate) struct MetalRenderer {
     underlines_pipeline_state: metal::RenderPipelineState,
     monochrome_sprites_pipeline_state: metal::RenderPipelineState,
     polychrome_sprites_pipeline_state: metal::RenderPipelineState,
+    external_textures_pipeline_state: metal::RenderPipelineState,
     surfaces_pipeline_state: metal::RenderPipelineState,
     unit_vertices: metal::Buffer,
     #[allow(clippy::arc_with_non_send_sync)]
@@ -240,6 +241,14 @@ impl MetalRenderer {
             "polychrome_sprite_fragment",
             MTLPixelFormat::BGRA8Unorm,
         );
+        let external_textures_pipeline_state = build_pipeline_state(
+            &device,
+            &library,
+            "external_textures",
+            "external_texture_vertex",
+            "external_texture_fragment",
+            MTLPixelFormat::BGRA8Unorm,
+        );
         let surfaces_pipeline_state = build_pipeline_state(
             &device,
             &library,
@@ -266,6 +275,7 @@ impl MetalRenderer {
             underlines_pipeline_state,
             monochrome_sprites_pipeline_state,
             polychrome_sprites_pipeline_state,
+            external_textures_pipeline_state,
             surfaces_pipeline_state,
             unit_vertices,
             instance_buffer_pool,
@@ -522,11 +532,22 @@ impl MetalRenderer {
                     viewport_size,
                     command_encoder,
                 ),
+                PrimitiveBatch::ExternalTextures {
+                    texture_id,
+                    textures,
+                } => self.draw_external_textures(
+                    texture_id,
+                    textures,
+                    instance_buffer,
+                    &mut instance_offset,
+                    viewport_size,
+                    command_encoder,
+                ),
             };
             if !ok {
                 command_encoder.end_encoding();
                 anyhow::bail!(
-                    "scene too large: {} paths, {} shadows, {} quads, {} underlines, {} mono, {} poly, {} surfaces",
+                    "scene too large: {} paths, {} shadows, {} quads, {} underlines, {} mono, {} poly, {} surfaces, {} external",
                     scene.paths.len(),
                     scene.shadows.len(),
                     scene.quads.len(),
@@ -534,6 +555,7 @@ impl MetalRenderer {
                     scene.monochrome_sprites.len(),
                     scene.polychrome_sprites.len(),
                     scene.surfaces.len(),
+                    scene.external_textures.len(),
                 );
             }
         }
@@ -1153,6 +1175,205 @@ impl MetalRenderer {
             *instance_offset = next_offset;
         }
         true
+    }
+
+    fn draw_external_textures(
+        &self,
+        texture_id: crate::ExternalTextureId,
+        textures: &[crate::ExternalTexture],
+        instance_buffer: &mut InstanceBuffer,
+        instance_offset: &mut usize,
+        viewport_size: Size<DevicePixels>,
+        command_encoder: &metal::RenderCommandEncoderRef,
+    ) -> bool {
+        if textures.is_empty() {
+            return true;
+        }
+        align_offset(instance_offset);
+
+        // Get external texture from atlas
+        let texture = match self.sprite_atlas.get_external_metal_texture(texture_id) {
+            Ok(tex) => tex,
+            Err(_) => return false,
+        };
+        let texture_size = size(
+            DevicePixels(texture.width() as i32),
+            DevicePixels(texture.height() as i32),
+        );
+
+        command_encoder.set_render_pipeline_state(&self.external_textures_pipeline_state);
+        command_encoder.set_vertex_buffer(
+            SpriteInputIndex::Vertices as u64,
+            Some(&self.unit_vertices),
+            0,
+        );
+        command_encoder.set_vertex_buffer(
+            SpriteInputIndex::Sprites as u64,
+            Some(&instance_buffer.metal_buffer),
+            *instance_offset as u64,
+        );
+        command_encoder.set_vertex_bytes(
+            SpriteInputIndex::ViewportSize as u64,
+            mem::size_of_val(&viewport_size) as u64,
+            &viewport_size as *const Size<DevicePixels> as *const _,
+        );
+        command_encoder.set_vertex_bytes(
+            SpriteInputIndex::AtlasTextureSize as u64,
+            mem::size_of_val(&texture_size) as u64,
+            &texture_size as *const Size<DevicePixels> as *const _,
+        );
+        command_encoder.set_fragment_buffer(
+            SpriteInputIndex::Sprites as u64,
+            Some(&instance_buffer.metal_buffer),
+            *instance_offset as u64,
+        );
+        command_encoder.set_fragment_texture(SpriteInputIndex::AtlasTexture as u64, Some(&texture));
+
+        let texture_bytes_len = mem::size_of_val(textures);
+        let buffer_contents =
+            unsafe { (instance_buffer.metal_buffer.contents() as *mut u8).add(*instance_offset) };
+
+        let next_offset = *instance_offset + texture_bytes_len;
+        if next_offset > instance_buffer.size {
+            return false;
+        }
+
+        unsafe {
+            ptr::copy_nonoverlapping(
+                textures.as_ptr() as *const u8,
+                buffer_contents,
+                texture_bytes_len,
+            );
+        }
+
+        command_encoder.draw_primitives_instanced(
+            metal::MTLPrimitiveType::TriangleStrip,
+            0,
+            4,
+            textures.len() as u64,
+        );
+        *instance_offset = next_offset;
+        true
+    }
+    
+    /// IMMEDIATE MODE: Draw a raw Metal texture pointer directly
+    /// This bypasses the scene graph and atlas for maximum performance
+    /// Used for game viewports that need instant, non-retained rendering
+    pub fn draw_raw_texture_immediate(
+        &mut self,
+        metal_texture_ptr: *mut c_void,
+        bounds: Bounds<ScaledPixels>,
+    ) -> Result<()> {
+        if metal_texture_ptr.is_null() {
+            return Ok(());
+        }
+
+        // Cast to Metal texture
+        let texture = unsafe {
+            let texture_ref = metal_texture_ptr as *mut metal::MTLTexture;
+            metal::Texture::from_ptr(texture_ref)
+        };
+
+        // Get or create a drawable
+        let drawable = match self.layer.next_drawable() {
+            Some(drawable) => drawable,
+            None => return Err(anyhow!("No drawable available")),
+        };
+
+        let viewport_size = size(
+            DevicePixels(drawable.texture().width() as i32),
+            DevicePixels(drawable.texture().height() as i32),
+        );
+
+        let command_buffer = self.command_queue.new_command_buffer();
+        let command_encoder = new_command_encoder(
+            command_buffer,
+            drawable.as_ref(),
+            viewport_size,
+            |attachment| {
+                attachment.set_load_action(metal::MTLLoadAction::Load);
+                attachment.set_store_action(metal::MTLStoreAction::Store);
+            },
+        );
+
+        // Set up rendering pipeline for external texture
+        command_encoder.set_render_pipeline_state(&self.external_textures_pipeline_state);
+        command_encoder.set_vertex_buffer(
+            SpriteInputIndex::Vertices as u64,
+            Some(&self.unit_vertices),
+            0,
+        );
+
+        // Create a single quad instance for this texture
+        let external_texture = crate::ExternalTexture {
+            order: 0,
+            pad: 0,
+            bounds,
+            content_mask: ContentMask::default(),
+            corner_radii: Corners::default(),
+            opacity: 1.0,
+            grayscale: false,
+            texture_id: crate::ExternalTextureId(0), // Unused for immediate mode
+        };
+
+        // Allocate instance buffer
+        let mut buffer_pool = self.instance_buffer_pool.lock();
+        let mut instance_buffer = buffer_pool.acquire(&self.device);
+        drop(buffer_pool);
+
+        let mut instance_offset = 0;
+        let texture_bytes_len = mem::size_of::<crate::ExternalTexture>();
+        let buffer_contents = unsafe {
+            (instance_buffer.metal_buffer.contents() as *mut u8).add(instance_offset)
+        };
+
+        unsafe {
+            ptr::copy_nonoverlapping(
+                &external_texture as *const _ as *const u8,
+                buffer_contents,
+                texture_bytes_len,
+            );
+        }
+
+        command_encoder.set_vertex_buffer(
+            SpriteInputIndex::Sprites as u64,
+            Some(&instance_buffer.metal_buffer),
+            instance_offset as u64,
+        );
+        command_encoder.set_vertex_bytes(
+            SpriteInputIndex::ViewportSize as u64,
+            mem::size_of_val(&viewport_size) as u64,
+            &viewport_size as *const Size<DevicePixels> as *const _,
+        );
+        
+        let texture_size = size(
+            DevicePixels(texture.width() as i32),
+            DevicePixels(texture.height() as i32),
+        );
+        command_encoder.set_vertex_bytes(
+            SpriteInputIndex::AtlasTextureSize as u64,
+            mem::size_of_val(&texture_size) as u64,
+            &texture_size as *const Size<DevicePixels> as *const _,
+        );
+        command_encoder.set_fragment_texture(SpriteInputIndex::AtlasTexture as u64, Some(&texture));
+
+        // Draw the quad
+        command_encoder.draw_primitives_instanced(
+            metal::MTLPrimitiveType::TriangleStrip,
+            0,
+            4,
+            1,
+        );
+
+        command_encoder.end_encoding();
+        command_buffer.present_drawable(drawable.as_ref());
+        command_buffer.commit();
+
+        // Return buffer to pool
+        let mut buffer_pool = self.instance_buffer_pool.lock();
+        buffer_pool.release(instance_buffer);
+
+        Ok(())
     }
 }
 

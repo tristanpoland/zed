@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo check --package gpui)",
+      "Bash(git log --all --oneline --grep=\"texture\\|canvas\\|GPU\\|garbl\" -i -20)",
+      "Bash(cargo build --package gpui)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

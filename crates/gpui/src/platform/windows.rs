@@ -13,6 +13,7 @@ mod system_settings;
 mod util;
 mod vsync;
 mod window;
+mod window_event_queue;
 mod wrapper;
 
 pub(crate) use clipboard::*;
@@ -30,6 +31,7 @@ pub(crate) use system_settings::*;
 pub(crate) use util::*;
 pub(crate) use vsync::*;
 pub(crate) use window::*;
+pub(crate) use window_event_queue::*;
 pub(crate) use wrapper::*;
 
 pub(crate) use windows::Win32::Foundation::HWND;

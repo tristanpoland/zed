@@ -102,6 +102,7 @@ inventory.workspace = true
 itertools.workspace = true
 log.workspace = true
 num_cpus = "1.13"
+once_cell = "1.19"
 parking = "2.0.0"
 parking_lot.workspace = true
 postage.workspace = true
@@ -225,6 +226,7 @@ xim = { git = "https://github.com/zed-industries/xim-rs.git", rev = "16f35a2c881
 x11-clipboard = { version = "0.9.3", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
+dashmap.workspace = true
 flume = "0.11"
 rand.workspace = true
 windows.workspace = true

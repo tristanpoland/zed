@@ -3,18 +3,41 @@ use etagere::BucketedAtlasAllocator;
 use parking_lot::Mutex;
 use windows::Win32::Graphics::{
     Direct3D11::{
-        D3D11_BIND_SHADER_RESOURCE, D3D11_BOX, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+        D3D11_BIND_SHADER_RESOURCE, D3D11_BOX, D3D11_CPU_ACCESS_WRITE, D3D11_MAP_WRITE,
+        D3D11_MAPPED_SUBRESOURCE, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING,
         ID3D11Device, ID3D11DeviceContext, ID3D11ShaderResourceView, ID3D11Texture2D,
     },
     Dxgi::Common::*,
 };
 
 use crate::{
-    AtlasKey, AtlasTextureId, AtlasTextureKind, AtlasTile, Bounds, DevicePixels, PlatformAtlas,
-    Point, Size, platform::AtlasTextureList,
+    AtlasKey, AtlasTextureId, AtlasTextureKind, AtlasTile, Bounds, DevicePixels, ExternalTextureId,
+    PlatformAtlas, Point, Size, platform::AtlasTextureList,
 };
 
 pub(crate) struct DirectXAtlas(Mutex<DirectXAtlasState>);
+
+/// External texture entry with double buffering and CPU-mappable staging texture
+struct ExternalTextureEntry {
+    /// Front texture (currently being rendered)
+    front_texture: ID3D11Texture2D,
+    front_view: ID3D11ShaderResourceView,
+    /// Back texture (currently being written to)
+    back_texture: ID3D11Texture2D,
+    back_view: ID3D11ShaderResourceView,
+    /// Staging texture for CPU writes (D3D11_USAGE_STAGING with CPU_ACCESS_WRITE)
+    staging_texture: ID3D11Texture2D,
+    /// Size of the texture
+    size: Size<DevicePixels>,
+    /// Pixel format
+    format: DXGI_FORMAT,
+    /// Bytes per pixel
+    bytes_per_pixel: u32,
+    /// Whether buffers need to be swapped
+    needs_swap: bool,
+    /// Whether staging texture is currently mapped
+    is_mapped: bool,
+}
 
 struct DirectXAtlasState {
     device: ID3D11Device,
@@ -22,6 +45,8 @@ struct DirectXAtlasState {
     monochrome_textures: AtlasTextureList<DirectXAtlasTexture>,
     polychrome_textures: AtlasTextureList<DirectXAtlasTexture>,
     tiles_by_key: FxHashMap<AtlasKey, AtlasTile>,
+    external_textures: FxHashMap<ExternalTextureId, ExternalTextureEntry>,
+    next_external_texture_id: u64,
 }
 
 struct DirectXAtlasTexture {
@@ -41,6 +66,8 @@ impl DirectXAtlas {
             monochrome_textures: Default::default(),
             polychrome_textures: Default::default(),
             tiles_by_key: Default::default(),
+            external_textures: Default::default(),
+            next_external_texture_id: 1,
         }))
     }
 
@@ -64,6 +91,205 @@ impl DirectXAtlas {
         lock.monochrome_textures = AtlasTextureList::default();
         lock.polychrome_textures = AtlasTextureList::default();
         lock.tiles_by_key.clear();
+        lock.external_textures.clear();
+    }
+
+    /// Register a new external GPU texture for rendering with CPU-mappable memory
+    pub fn register_external_texture(
+        &self,
+        size: Size<DevicePixels>,
+        format: DXGI_FORMAT,
+    ) -> anyhow::Result<ExternalTextureId> {
+        let mut lock = self.0.lock();
+
+        let bytes_per_pixel = match format {
+            DXGI_FORMAT_R8G8B8A8_UNORM | DXGI_FORMAT_B8G8R8A8_UNORM => 4,
+            DXGI_FORMAT_R8_UNORM => 1,
+            _ => anyhow::bail!("Unsupported texture format"),
+        };
+
+        // Create front texture (GPU-only, used for rendering)
+        let front_desc = D3D11_TEXTURE2D_DESC {
+            Width: size.width.0 as u32,
+            Height: size.height.0 as u32,
+            MipLevels: 1,
+            ArraySize: 1,
+            Format: format,
+            SampleDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Usage: D3D11_USAGE_DEFAULT,
+            BindFlags: D3D11_BIND_SHADER_RESOURCE.0 as u32,
+            CPUAccessFlags: 0,
+            MiscFlags: 0,
+        };
+
+        let mut front_texture: Option<ID3D11Texture2D> = None;
+        unsafe {
+            lock.device
+                .CreateTexture2D(&front_desc, None, Some(&mut front_texture))?;
+        }
+        let front_texture = front_texture.unwrap();
+
+        let mut front_view = None;
+        unsafe {
+            lock.device
+                .CreateShaderResourceView(&front_texture, None, Some(&mut front_view))?;
+        }
+        let front_view = front_view.unwrap();
+
+        // Create back texture (identical to front)
+        let mut back_texture: Option<ID3D11Texture2D> = None;
+        unsafe {
+            lock.device
+                .CreateTexture2D(&front_desc, None, Some(&mut back_texture))?;
+        }
+        let back_texture = back_texture.unwrap();
+
+        let mut back_view = None;
+        unsafe {
+            lock.device
+                .CreateShaderResourceView(&back_texture, None, Some(&mut back_view))?;
+        }
+        let back_view = back_view.unwrap();
+
+        // Create staging texture (CPU-mappable for direct writes)
+        let staging_desc = D3D11_TEXTURE2D_DESC {
+            Usage: D3D11_USAGE_STAGING,
+            BindFlags: 0,
+            CPUAccessFlags: D3D11_CPU_ACCESS_WRITE.0 as u32,
+            ..front_desc
+        };
+
+        let mut staging_texture: Option<ID3D11Texture2D> = None;
+        unsafe {
+            lock.device
+                .CreateTexture2D(&staging_desc, None, Some(&mut staging_texture))?;
+        }
+        let staging_texture = staging_texture.unwrap();
+
+        let id = ExternalTextureId(lock.next_external_texture_id);
+        lock.next_external_texture_id += 1;
+
+        lock.external_textures.insert(id, ExternalTextureEntry {
+            front_texture,
+            front_view,
+            back_texture,
+            back_view,
+            staging_texture,
+            size,
+            format,
+            bytes_per_pixel,
+            needs_swap: false,
+            is_mapped: false,
+        });
+
+        Ok(id)
+    }
+
+    /// Map an external texture for CPU writes, returns a mutable slice
+    ///
+    /// SAFETY: Caller must ensure the returned slice is not used after unmap is called
+    pub unsafe fn map_external_texture(&self, id: ExternalTextureId) -> anyhow::Result<&mut [u8]> {
+        let mut lock = self.0.lock();
+
+        // Get texture info first
+        let (staging_texture, size, bytes_per_pixel) = {
+            let entry = lock.external_textures.get(&id)
+                .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
+
+            if entry.is_mapped {
+                anyhow::bail!("Texture already mapped");
+            }
+
+            (entry.staging_texture.clone(), entry.size, entry.bytes_per_pixel)
+        };
+
+        let size = (size.width.0 * size.height.0) as usize * bytes_per_pixel as usize;
+
+        let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+        unsafe {
+            lock.device_context.Map(
+                &staging_texture,
+                0,
+                D3D11_MAP_WRITE,
+                0,
+                Some(&mut mapped),
+            )?;
+        }
+
+        // Now mark as mapped
+        if let Some(entry) = lock.external_textures.get_mut(&id) {
+            entry.is_mapped = true;
+        }
+
+        // SAFETY: The pointer is valid for the size of the texture, and the caller
+        // guarantees it won't be used after unmap
+        Ok(unsafe { std::slice::from_raw_parts_mut(mapped.pData as *mut u8, size) })
+    }
+
+    /// Unmap an external texture after CPU writes are complete
+    pub fn unmap_external_texture(&self, id: ExternalTextureId) -> anyhow::Result<()> {
+        let mut lock = self.0.lock();
+
+        // Get texture references first
+        let (staging_texture, back_texture, is_mapped) = {
+            let entry = lock.external_textures.get(&id)
+                .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
+
+            if !entry.is_mapped {
+                anyhow::bail!("Texture not mapped");
+            }
+
+            (entry.staging_texture.clone(), entry.back_texture.clone(), entry.is_mapped)
+        };
+
+        unsafe {
+            lock.device_context.Unmap(&staging_texture, 0);
+        }
+
+        // Copy staging texture to back texture
+        unsafe {
+            lock.device_context.CopyResource(&back_texture, &staging_texture);
+        }
+
+        // Mark as unmapped and needs swap
+        if let Some(entry) = lock.external_textures.get_mut(&id) {
+            entry.is_mapped = false;
+            entry.needs_swap = true;
+        }
+
+        Ok(())
+    }
+
+    /// Swap front/back buffers for an external texture
+    pub fn swap_external_texture_buffers(&self, id: ExternalTextureId) -> anyhow::Result<()> {
+        let mut lock = self.0.lock();
+        let entry = lock.external_textures.get_mut(&id)
+            .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
+
+        if entry.needs_swap {
+            std::mem::swap(&mut entry.front_texture, &mut entry.back_texture);
+            std::mem::swap(&mut entry.front_view, &mut entry.back_view);
+            entry.needs_swap = false;
+        }
+        Ok(())
+    }
+
+    /// Get texture view for rendering
+    pub fn get_external_texture_view(&self, id: ExternalTextureId) -> anyhow::Result<[Option<ID3D11ShaderResourceView>; 1]> {
+        let lock = self.0.lock();
+        let entry = lock.external_textures.get(&id)
+            .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
+        Ok([Some(entry.front_view.clone())])
+    }
+
+    /// Unregister an external texture
+    pub fn unregister_external_texture(&self, id: ExternalTextureId) {
+        let mut lock = self.0.lock();
+        lock.external_textures.remove(&id);
+        // D3D11 resources are automatically released when dropped
     }
 }
 
@@ -117,6 +343,10 @@ impl PlatformAtlas for DirectXAtlas {
                 *texture_slot = Some(texture);
             }
         }
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

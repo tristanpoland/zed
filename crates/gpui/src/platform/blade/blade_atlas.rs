@@ -1,6 +1,6 @@
 use crate::{
-    AtlasKey, AtlasTextureId, AtlasTextureKind, AtlasTile, Bounds, DevicePixels, PlatformAtlas,
-    Point, Size, platform::AtlasTextureList,
+    AtlasKey, AtlasTextureId, AtlasTextureKind, AtlasTile, Bounds, DevicePixels, ExternalTextureId,
+    PlatformAtlas, Point, Size, platform::AtlasTextureList,
 };
 use anyhow::Result;
 use blade_graphics as gpu;
@@ -18,6 +18,28 @@ struct PendingUpload {
     data: gpu::BufferPiece,
 }
 
+/// External texture entry with double buffering and direct CPU mapping
+struct ExternalTextureEntry {
+    /// Front texture (currently being rendered)
+    front_texture: gpu::Texture,
+    front_view: gpu::TextureView,
+    /// Back texture (currently being written to by CPU)
+    back_texture: gpu::Texture,
+    back_view: gpu::TextureView,
+    /// Staging buffer for CPU writes (maps to back texture)
+    staging_buffer: gpu::Buffer,
+    /// Size of the texture
+    size: Size<DevicePixels>,
+    /// Texture format
+    format: gpu::TextureFormat,
+    /// Bytes per pixel
+    bytes_per_pixel: u32,
+    /// Whether buffers need to be swapped
+    needs_swap: bool,
+    /// Pointer to mapped CPU-accessible memory (when mapped)
+    mapped_ptr: Option<*mut u8>,
+}
+
 struct BladeAtlasState {
     gpu: Arc<gpu::Context>,
     upload_belt: BufferBelt,
@@ -25,6 +47,8 @@ struct BladeAtlasState {
     tiles_by_key: FxHashMap<AtlasKey, AtlasTile>,
     initializations: Vec<AtlasTextureId>,
     uploads: Vec<PendingUpload>,
+    external_textures: FxHashMap<ExternalTextureId, ExternalTextureEntry>,
+    next_external_texture_id: u64,
 }
 
 #[cfg(gles)]
@@ -54,6 +78,8 @@ impl BladeAtlas {
             tiles_by_key: Default::default(),
             initializations: Vec::new(),
             uploads: Vec::new(),
+            external_textures: Default::default(),
+            next_external_texture_id: 1,
         }))
     }
 
@@ -76,6 +102,198 @@ impl BladeAtlas {
         let texture = &lock.storage[id];
         BladeTextureInfo {
             raw_view: texture.raw_view,
+        }
+    }
+
+    /// Register a new external GPU texture for rendering with CPU-mappable memory
+    pub fn register_external_texture(
+        &self,
+        size: Size<DevicePixels>,
+        format: gpu::TextureFormat,
+    ) -> Result<ExternalTextureId> {
+        let mut lock = self.0.lock();
+
+        let bytes_per_pixel = match format {
+            gpu::TextureFormat::Rgba8Unorm | gpu::TextureFormat::Bgra8Unorm => 4,
+            gpu::TextureFormat::R8Unorm => 1,
+            _ => anyhow::bail!("Unsupported texture format"),
+        };
+
+        let buffer_size = (size.width.0 * size.height.0) as u64 * bytes_per_pixel as u64;
+
+        // Create front texture (GPU-only, used for rendering)
+        let front_texture = lock.gpu.create_texture(gpu::TextureDesc {
+            name: "external-texture-front",
+            format,
+            size: gpu::Extent {
+                width: size.width.0 as u32,
+                height: size.height.0 as u32,
+                depth: 1,
+            },
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: gpu::TextureDimension::D2,
+            usage: gpu::TextureUsage::COPY | gpu::TextureUsage::RESOURCE,
+            external: None,
+        });
+
+        let front_view = lock.gpu.create_texture_view(
+            front_texture,
+            gpu::TextureViewDesc {
+                name: "external-texture-front-view",
+                format,
+                dimension: gpu::ViewDimension::D2,
+                subresources: &Default::default(),
+            },
+        );
+
+        // Create back texture (GPU-only, receives copies from staging buffer)
+        let back_texture = lock.gpu.create_texture(gpu::TextureDesc {
+            name: "external-texture-back",
+            format,
+            size: gpu::Extent {
+                width: size.width.0 as u32,
+                height: size.height.0 as u32,
+                depth: 1,
+            },
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: gpu::TextureDimension::D2,
+            usage: gpu::TextureUsage::COPY | gpu::TextureUsage::RESOURCE,
+            external: None,
+        });
+
+        let back_view = lock.gpu.create_texture_view(
+            back_texture,
+            gpu::TextureViewDesc {
+                name: "external-texture-back-view",
+                format,
+                dimension: gpu::ViewDimension::D2,
+                subresources: &Default::default(),
+            },
+        );
+
+        // Create staging buffer (CPU-mappable for direct writes)
+        let staging_buffer = lock.gpu.create_buffer(gpu::BufferDesc {
+            name: "external-texture-staging",
+            size: buffer_size,
+            memory: gpu::Memory::Shared, // CPU-visible memory
+        });
+
+        let id = ExternalTextureId(lock.next_external_texture_id);
+        lock.next_external_texture_id += 1;
+
+        lock.external_textures.insert(id, ExternalTextureEntry {
+            front_texture,
+            front_view,
+            back_texture,
+            back_view,
+            staging_buffer,
+            size,
+            format,
+            bytes_per_pixel,
+            needs_swap: false,
+            mapped_ptr: None,
+        });
+
+        Ok(id)
+    }
+
+    /// Map an external texture for CPU writes, returns a mutable slice
+    ///
+    /// SAFETY: Caller must ensure no concurrent GPU access to the back buffer
+    /// while mapped. Call `unmap_external_texture` before swap/render.
+    pub unsafe fn map_external_texture(&self, id: ExternalTextureId) -> Result<&mut [u8]> {
+        let mut lock = self.0.lock();
+        let entry = lock.external_textures.get_mut(&id)
+            .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
+
+        if entry.mapped_ptr.is_some() {
+            anyhow::bail!("Texture already mapped");
+        }
+
+        let size = (entry.size.width.0 * entry.size.height.0) as usize * entry.bytes_per_pixel as usize;
+        let ptr = lock.gpu.map_buffer(entry.staging_buffer, gpu::MapMode::Write);
+
+        entry.mapped_ptr = Some(ptr as *mut u8);
+
+        // SAFETY: The caller guarantees correct lifetime management
+        Ok(std::slice::from_raw_parts_mut(ptr as *mut u8, size))
+    }
+
+    /// Unmap an external texture after CPU writes are complete
+    pub fn unmap_external_texture(&self, id: ExternalTextureId, encoder: &mut gpu::CommandEncoder) -> Result<()> {
+        let mut lock = self.0.lock();
+        let entry = lock.external_textures.get_mut(&id)
+            .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
+
+        if entry.mapped_ptr.is_none() {
+            anyhow::bail!("Texture not mapped");
+        }
+
+        lock.gpu.unmap_buffer(entry.staging_buffer);
+        entry.mapped_ptr = None;
+
+        // Copy staging buffer to back texture
+        let mut transfer = encoder.transfer("external-texture-copy");
+        transfer.copy_buffer_to_texture(
+            gpu::BufferPiece {
+                buffer: entry.staging_buffer,
+                offset: 0,
+                size: (entry.size.width.0 * entry.size.height.0) as u64 * entry.bytes_per_pixel as u64,
+            },
+            entry.size.width.0 as u32 * entry.bytes_per_pixel,
+            gpu::TexturePiece {
+                texture: entry.back_texture,
+                mip_level: 0,
+                array_layer: 0,
+                origin: [0, 0, 0],
+            },
+            gpu::Extent {
+                width: entry.size.width.0 as u32,
+                height: entry.size.height.0 as u32,
+                depth: 1,
+            },
+        );
+
+        entry.needs_swap = true;
+        Ok(())
+    }
+
+    /// Swap front/back buffers for an external texture (call before rendering)
+    pub fn swap_external_texture_buffers(&self, id: ExternalTextureId) -> Result<()> {
+        let mut lock = self.0.lock();
+        let entry = lock.external_textures.get_mut(&id)
+            .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
+
+        if entry.needs_swap {
+            std::mem::swap(&mut entry.front_texture, &mut entry.back_texture);
+            std::mem::swap(&mut entry.front_view, &mut entry.back_view);
+            entry.needs_swap = false;
+        }
+        Ok(())
+    }
+
+    /// Get texture info for rendering
+    pub fn get_external_texture_info(&self, id: ExternalTextureId) -> BladeTextureInfo {
+        let lock = self.0.lock();
+        let entry = &lock.external_textures[&id];
+        BladeTextureInfo {
+            raw_view: entry.front_view,
+        }
+    }
+
+    /// Unregister an external texture
+    pub fn unregister_external_texture(&self, id: ExternalTextureId) {
+        let mut lock = self.0.lock();
+        if let Some(entry) = lock.external_textures.remove(&id) {
+            lock.gpu.destroy_texture(entry.front_texture);
+            lock.gpu.destroy_texture_view(entry.front_view);
+            lock.gpu.destroy_texture(entry.back_texture);
+            lock.gpu.destroy_texture_view(entry.back_view);
+            lock.gpu.destroy_buffer(entry.staging_buffer);
         }
     }
 }
@@ -123,6 +341,10 @@ impl PlatformAtlas for BladeAtlas {
                 *texture_slot = Some(texture);
             }
         }
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -235,6 +457,8 @@ impl BladeAtlasState {
         self.flush_initializations(encoder);
 
         let mut transfers = encoder.transfer("atlas");
+
+        // Upload atlas textures only
         for upload in self.uploads.drain(..) {
             let texture = &self.storage[upload.id];
             transfers.copy_buffer_to_texture(
@@ -257,6 +481,8 @@ impl BladeAtlasState {
                 },
             );
         }
+
+        // External textures are uploaded via map/unmap, not here
     }
 }
 

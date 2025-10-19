@@ -458,6 +458,9 @@ pub(crate) struct RequestFrameOptions {
 }
 
 pub(crate) trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
+    /// Downcast to Any for platform-specific functionality
+    fn as_any(&self) -> &dyn std::any::Any;
+    
     fn bounds(&self) -> Bounds<Pixels>;
     fn is_maximized(&self) -> bool;
     fn window_bounds(&self) -> WindowBounds;
@@ -549,6 +552,20 @@ pub(crate) trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn gpu_specs(&self) -> Option<GpuSpecs>;
 
     fn update_ime_position(&self, _bounds: Bounds<Pixels>);
+    
+    /// IMMEDIATE MODE: Draw a raw GPU texture pointer directly
+    /// Platform-specific immediate rendering for game viewports
+    /// 
+    /// # Safety
+    /// The caller must ensure texture_handle is a valid platform-specific GPU texture pointer:
+    /// - Windows: ID3D11ShaderResourceView*
+    /// - macOS: MTLTexture*
+    /// - Linux: gpu::TextureView (Blade/Vulkan)
+    unsafe fn draw_raw_texture_immediate(
+        &mut self,
+        texture_handle: *mut std::ffi::c_void,
+        bounds: Bounds<Pixels>,
+    ) -> anyhow::Result<()>;
 
     #[cfg(any(test, feature = "test-support"))]
     fn as_test(&mut self) -> Option<&mut TestWindow> {
@@ -768,6 +785,9 @@ pub(crate) trait PlatformAtlas: Send + Sync {
         build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
     ) -> Result<Option<AtlasTile>>;
     fn remove(&self, key: &AtlasKey);
+    
+    /// Allow downcasting to concrete platform types for platform-specific features
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 struct AtlasTextureList<T> {

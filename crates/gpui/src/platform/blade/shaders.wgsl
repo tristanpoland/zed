@@ -1294,3 +1294,58 @@ fn fs_surface(input: SurfaceVarying) -> @location(0) vec4<f32> {
 
     return ycbcr_to_RGB * y_cb_cr;
 }
+
+// --- external textures --- //
+
+struct ExternalTexture {
+    order: u32,
+    pad: u32,
+    opacity: f32,
+    grayscale: u32,
+    bounds: Bounds,
+    content_mask: Bounds,
+    corner_radii: Corners,
+    texture_id: u64,
+}
+var<storage, read> b_external_textures: array<ExternalTexture>;
+var t_texture: texture_2d<f32>;
+var s_texture: sampler;
+
+struct ExternalTextureVarying {
+    @builtin(position) position: vec4<f32>,
+    @location(0) texture_position: vec2<f32>,
+    @location(1) @interpolate(flat) texture_id: u32,
+    @location(3) clip_distances: vec4<f32>,
+}
+
+@vertex
+fn vs_external_texture(@builtin(vertex_index) vertex_id: u32, @builtin(instance_index) instance_id: u32) -> ExternalTextureVarying {
+    let unit_vertex = vec2<f32>(f32(vertex_id & 1u), 0.5 * f32(vertex_id & 2u));
+    let texture = b_external_textures[instance_id];
+
+    var out = ExternalTextureVarying();
+    out.position = to_device_position(unit_vertex, texture.bounds);
+    out.texture_position = unit_vertex;
+    out.texture_id = instance_id;
+    out.clip_distances = distance_from_clip_rect(unit_vertex, texture.bounds, texture.content_mask);
+    return out;
+}
+
+@fragment
+fn fs_external_texture(input: ExternalTextureVarying) -> @location(0) vec4<f32> {
+    let sample = textureSample(t_texture, s_texture, input.texture_position);
+    // Alpha clip after using the derivatives.
+    if (any(input.clip_distances < vec4<f32>(0.0))) {
+        return vec4<f32>(0.0);
+    }
+
+    let texture = b_external_textures[input.texture_id];
+    let distance = quad_sdf(input.position.xy, texture.bounds, texture.corner_radii);
+
+    var color = sample;
+    if ((texture.grayscale & 0xFFu) != 0u) {
+        let grayscale = dot(color.rgb, GRAYSCALE_FACTORS);
+        color = vec4<f32>(vec3<f32>(grayscale), sample.a);
+    }
+    return blend_color(color, texture.opacity * saturate(0.5 - distance));
+}
