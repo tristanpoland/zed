@@ -9,6 +9,7 @@ use std::sync::Arc;
 /// This represents a shared GPU texture that can be rendered without CPU copies.
 #[derive(Clone, Debug)]
 pub enum GpuTextureHandle {
+    /// Windows DX11/DX12 shared texture handle
     #[cfg(target_os = "windows")]
     Windows {
         /// NT handle to the shared DX12/DX11 texture
@@ -18,11 +19,13 @@ pub enum GpuTextureHandle {
         /// Height of the texture
         height: u32,
     },
+    /// macOS Metal shared texture handle
     #[cfg(target_os = "macos")]
     Metal {
         /// IOSurface handle for Metal/OpenGL sharing
         io_surface: metal::IOSurface,
     },
+    /// Linux Vulkan shared texture handle
     #[cfg(target_os = "linux")]
     Vulkan {
         /// DMA-BUF file descriptor for Vulkan/OpenGL sharing

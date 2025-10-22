@@ -3184,25 +3184,21 @@ impl Window {
     ) {
         self.invalidator.debug_assert_paint();
         
-        // For now, store as a polychrome sprite with a special marker
-        // The platform renderer will detect the handle and render it directly
-        // TODO: Add proper GpuTexture primitive type to Scene
+        // For now, render a debug quad showing the texture is being painted
+        // Platform renderer will replace this with actual shared texture rendering
         let scale_factor = self.scale_factor();
         let bounds = bounds.scale(scale_factor);
         let content_mask = self.content_mask().scale(scale_factor);
-        let opacity = self.element_opacity();
         
-        // Render a debug quad showing the texture is being painted
-        // Platform renderer will replace this with actual shared texture rendering
         self.next_frame.scene.insert_primitive(Quad {
             order: 0,
             bounds,
             content_mask,
             background: Background::from(crate::rgb(0x404040)),
-            border_color: crate::rgba(0x00ff0080),
+            border_color: crate::rgb(0x00ff00).into(),
             corner_radii: Corners::default(),
-            border_widths: Edges::all(px(1.0).into()),
-            opacity,
+            border_widths: Edges::all(ScaledPixels(1.0)),
+            border_style: BorderStyle::Solid,
         });
     }
 

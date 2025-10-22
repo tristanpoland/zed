@@ -573,28 +573,34 @@ impl DirectXRenderer {
         use crate::scene::SurfaceSource;
         use windows::Win32::Graphics::Direct3D11::*;
         use std::collections::HashMap;
+        use std::sync::OnceLock;
 
         if surfaces.is_empty() {
             return Ok(());
         }
 
-        static SHARED_TEXTURE_CACHE: std::sync::Mutex<HashMap<isize, ID3D11ShaderResourceView>> =
-            std::sync::Mutex::new(HashMap::new());
+        static SHARED_TEXTURE_CACHE: OnceLock<std::sync::Mutex<HashMap<isize, ID3D11ShaderResourceView>>> = OnceLock::new();
 
         for surface in surfaces {
             match &surface.source {
                 #[cfg(target_os = "windows")]
                 SurfaceSource::SharedTexture { nt_handle, width, height } => {
-                    let mut cache = SHARED_TEXTURE_CACHE.lock().unwrap();
+                    let cache_mutex = SHARED_TEXTURE_CACHE.get_or_init(|| {
+                        std::sync::Mutex::new(HashMap::new())
+                    });
+                    let mut cache = cache_mutex.lock().unwrap();
                     
                     let srv = if let Some(srv) = cache.get(nt_handle) {
                         srv.clone()
                     } else {
-                        let texture: ID3D11Texture2D = unsafe {
+                        let mut texture: Option<ID3D11Texture2D> = None;
+                        unsafe {
                             self.devices.device.OpenSharedResource(
-                                windows::Win32::Foundation::HANDLE(*nt_handle as _)
+                                windows::Win32::Foundation::HANDLE(*nt_handle as _),
+                                &mut texture,
                             )?
                         };
+                        let texture = texture.unwrap();
 
                         let srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
                             Format: RENDER_TARGET_FORMAT,
@@ -607,17 +613,27 @@ impl DirectXRenderer {
                             },
                         };
 
-                        let srv = unsafe {
-                            self.devices.device.CreateShaderResourceView(&texture, Some(&srv_desc))?
+                        let mut srv: Option<ID3D11ShaderResourceView> = None;
+                        unsafe {
+                            self.devices.device.CreateShaderResourceView(&texture, Some(&srv_desc), Some(&mut srv))?
                         };
+                        let srv = srv.unwrap();
 
                         cache.insert(*nt_handle, srv.clone());
                         srv
                     };
 
-                    let texture_size = crate::size((*width as f32).into(), (*height as f32).into());
+                    let texture_size = crate::size(
+                        DevicePixels::from(*width as i32), 
+                        DevicePixels::from(*height as i32)
+                    );
+                    
+                    // Convert ScaledPixels to Pixels for get_bounds
+                    let scale_factor = 1.0; // Already scaled in scene
+                    let bounds_pixels = surface.bounds.map(|sp| Pixels(sp.0 / scale_factor));
+                    
                     let display_bounds = surface.object_fit.get_bounds(
-                        surface.bounds.map(Into::into),
+                        bounds_pixels,
                         texture_size,
                     );
 
@@ -627,8 +643,7 @@ impl DirectXRenderer {
                         &self.resources.viewport,
                         &self.globals.global_params_buffer,
                         &self.globals.sampler,
-                        &surface.bounds.map(Into::into),
-                        &display_bounds,
+                        1, // instance_count
                     )?;
                 }
                 #[allow(unreachable_patterns)]
