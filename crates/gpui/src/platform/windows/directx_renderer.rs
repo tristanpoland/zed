@@ -628,7 +628,7 @@ impl DirectXRenderer {
                         DevicePixels::from(*height as i32)
                     );
                     
-                    // Convert ScaledPixels to Pixels for get_bounds
+                    // Convert ScaledPixels to Pixels for get_bounds  
                     let scale_factor = 1.0; // Already scaled in scene
                     let bounds_pixels = surface.bounds.map(|sp| Pixels(sp.0 / scale_factor));
                     
@@ -636,6 +636,26 @@ impl DirectXRenderer {
                         bounds_pixels,
                         texture_size,
                     );
+
+                    // Create sprite to actually draw the texture
+                    let sprite = PolychromeSprite {
+                        bounds: display_bounds.scale(scale_factor),
+                        tile: AtlasTile {
+                            texture_id: AtlasTextureId::default(), // Unused for shared textures
+                            tile_id: Default::default(),
+                            padding: 0,
+                            bounds: crate::Bounds {
+                                origin: crate::point(ScaledPixels(0.0), ScaledPixels(0.0)),
+                                size: crate::size(ScaledPixels(*width as f32), ScaledPixels(*height as f32)),
+                            },
+                        },
+                    };
+
+                    self.pipelines.poly_sprites.update_buffer(
+                        &self.devices.device,
+                        &self.devices.device_context,
+                        &[sprite],
+                    )?;
 
                     self.pipelines.poly_sprites.draw_with_texture(
                         &self.devices.device_context,
