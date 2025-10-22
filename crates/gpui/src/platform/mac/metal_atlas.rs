@@ -1,6 +1,6 @@
 use crate::{
-    AtlasKey, AtlasTextureId, AtlasTextureKind, AtlasTile, Bounds, DevicePixels,
-    ExternalTextureId, PlatformAtlas, Point, Size, platform::AtlasTextureList,
+    AtlasKey, AtlasTextureId, AtlasTextureKind, AtlasTile, Bounds, DevicePixels, PlatformAtlas,
+    Point, Size, platform::AtlasTextureList,
 };
 use anyhow::{Context as _, Result};
 use collections::FxHashMap;
@@ -19,115 +19,12 @@ impl MetalAtlas {
             monochrome_textures: Default::default(),
             polychrome_textures: Default::default(),
             tiles_by_key: Default::default(),
-            external_textures: Default::default(),
-            next_external_texture_id: 1,
         }))
     }
 
     pub(crate) fn metal_texture(&self, id: AtlasTextureId) -> metal::Texture {
         self.0.lock().texture(id).metal_texture.clone()
     }
-
-    /// Register a new external texture with double buffering
-    pub fn register_external_texture(
-        &self,
-        size: Size<DevicePixels>,
-    ) -> Result<ExternalTextureId> {
-        let mut lock = self.0.lock();
-
-        let descriptor = metal::TextureDescriptor::new();
-        descriptor.set_width(size.width.0 as u64);
-        descriptor.set_height(size.height.0 as u64);
-        descriptor.set_pixel_format(metal::MTLPixelFormat::BGRA8Unorm);
-        descriptor.set_usage(metal::MTLTextureUsage::ShaderRead | metal::MTLTextureUsage::RenderTarget);
-        descriptor.set_storage_mode(metal::MTLStorageMode::Shared); // CPU-mappable shared memory
-
-        // Create front texture (for rendering)
-        let front_texture = lock.device.0.new_texture(&descriptor);
-
-        // Create back texture (receives CPU writes)
-        let back_texture = lock.device.0.new_texture(&descriptor);
-
-        let id = ExternalTextureId(lock.next_external_texture_id);
-        lock.next_external_texture_id += 1;
-
-        lock.external_textures.insert(id, ExternalTextureEntry {
-            front_texture: AssertSend(front_texture),
-            back_texture: AssertSend(back_texture),
-            size,
-            needs_swap: false,
-        });
-
-        Ok(id)
-    }
-
-    /// Map an external texture for CPU writes, returns a mutable slice
-    ///
-    /// SAFETY: Caller must ensure the returned slice is not used after unmap is called
-    pub unsafe fn map_external_texture(&self, id: ExternalTextureId) -> Result<&mut [u8]> {
-        let lock = self.0.lock();
-        let entry = lock.external_textures.get(&id)
-            .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
-
-        let bytes_per_row = (entry.size.width.0 * 4) as usize; // BGRA = 4 bytes per pixel
-        let total_size = bytes_per_row * entry.size.height.0 as usize;
-
-        let region = metal::MTLRegion::new_2d(0, 0, entry.size.width.0 as u64, entry.size.height.0 as u64);
-        let ptr = entry.back_texture.0.contents();
-
-        // SAFETY: Shared storage mode guarantees CPU access, pointer is valid for texture lifetime
-        Ok(unsafe { std::slice::from_raw_parts_mut(ptr as *mut u8, total_size) })
-    }
-
-    /// Unmap an external texture after CPU writes are complete (no-op for Metal shared storage)
-    pub fn unmap_external_texture(&self, id: ExternalTextureId) -> Result<()> {
-        let mut lock = self.0.lock();
-        let entry = lock.external_textures.get_mut(&id)
-            .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
-
-        // Mark as needing swap
-        entry.needs_swap = true;
-        Ok(())
-    }
-
-    /// Swap front/back buffers for an external texture
-    pub fn swap_external_texture_buffers(&self, id: ExternalTextureId) -> Result<()> {
-        let mut lock = self.0.lock();
-        let entry = lock.external_textures.get_mut(&id)
-            .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
-
-        if entry.needs_swap {
-            std::mem::swap(&mut entry.front_texture, &mut entry.back_texture);
-            entry.needs_swap = false;
-        }
-
-        Ok(())
-    }
-
-    /// Get Metal texture for rendering
-    pub fn get_external_metal_texture(&self, id: ExternalTextureId) -> Result<metal::Texture> {
-        let lock = self.0.lock();
-        let entry = lock.external_textures.get(&id)
-            .ok_or_else(|| anyhow::anyhow!("External texture not found"))?;
-        Ok(entry.front_texture.0.clone())
-    }
-
-    /// Unregister an external texture
-    pub fn unregister_external_texture(&self, id: ExternalTextureId) {
-        let mut lock = self.0.lock();
-        lock.external_textures.remove(&id);
-    }
-}
-
-struct ExternalTextureEntry {
-    /// Front texture (currently being rendered)
-    front_texture: AssertSend<metal::Texture>,
-    /// Back texture (receives CPU writes)
-    back_texture: AssertSend<metal::Texture>,
-    /// Size of the texture
-    size: Size<DevicePixels>,
-    /// Whether buffers need to be swapped
-    needs_swap: bool,
 }
 
 struct MetalAtlasState {
@@ -135,8 +32,6 @@ struct MetalAtlasState {
     monochrome_textures: AtlasTextureList<MetalAtlasTexture>,
     polychrome_textures: AtlasTextureList<MetalAtlasTexture>,
     tiles_by_key: FxHashMap<AtlasKey, AtlasTile>,
-    external_textures: FxHashMap<ExternalTextureId, ExternalTextureEntry>,
-    next_external_texture_id: u64,
 }
 
 impl PlatformAtlas for MetalAtlas {
@@ -191,10 +86,6 @@ impl PlatformAtlas for MetalAtlas {
                 *texture_slot = Some(texture);
             }
         }
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 

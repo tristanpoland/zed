@@ -74,8 +74,6 @@ pub(crate) struct WindowsWindowInner {
     pub(crate) validation_number: usize,
     pub(crate) main_receiver: flume::Receiver<Runnable>,
     pub(crate) platform_window_handle: HWND,
-    /// Per-window event queue - completely isolated from other windows
-    pub(crate) event_queue: WindowEventQueue,
 }
 
 impl WindowsWindowState {
@@ -208,11 +206,6 @@ impl WindowsWindowState {
 }
 
 impl WindowsWindowInner {
-    /// Check if this window is the active/focused window
-    pub(super) fn is_active(&self) -> bool {
-        self.hwnd == unsafe { GetActiveWindow() }
-    }
-
     fn new(context: &mut WindowCreateContext, hwnd: HWND, cs: &CREATESTRUCTW) -> Result<Rc<Self>> {
         let state = RefCell::new(WindowsWindowState::new(
             hwnd,
@@ -238,7 +231,6 @@ impl WindowsWindowInner {
             validation_number: context.validation_number,
             main_receiver: context.main_receiver.clone(),
             platform_window_handle: context.platform_window_handle,
-            event_queue: WindowEventQueue::new(),
         }))
     }
 
@@ -516,10 +508,6 @@ impl Drop for WindowsWindow {
 }
 
 impl PlatformWindow for WindowsWindow {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-    
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.state.borrow().bounds()
     }
@@ -861,16 +849,6 @@ impl PlatformWindow for WindowsWindow {
 
     fn update_ime_position(&self, _bounds: Bounds<Pixels>) {
         // There is no such thing on Windows.
-    }
-    
-    unsafe fn draw_raw_texture_immediate(
-        &mut self,
-        texture_handle: *mut std::ffi::c_void,
-        bounds: Bounds<Pixels>,
-    ) -> anyhow::Result<()> {
-        let scale_factor = self.scale_factor();
-        let scaled_bounds = bounds.scale(scale_factor);
-        self.0.state.borrow_mut().renderer.draw_raw_texture_immediate(texture_handle, scaled_bounds)
     }
 }
 

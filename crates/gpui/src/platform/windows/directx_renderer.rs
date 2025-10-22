@@ -83,7 +83,6 @@ struct DirectXRenderPipelines {
     underline_pipeline: PipelineState<Underline>,
     mono_sprites: PipelineState<MonochromeSprite>,
     poly_sprites: PipelineState<PolychromeSprite>,
-    external_textures: PipelineState<crate::ExternalTexture>,
 }
 
 struct DirectXGlobalElements {
@@ -304,19 +303,14 @@ impl DirectXRenderer {
                     sprites,
                 } => self.draw_polychrome_sprites(texture_id, sprites),
                 PrimitiveBatch::Surfaces(surfaces) => self.draw_surfaces(surfaces),
-                PrimitiveBatch::ExternalTextures {
-                    texture_id,
-                    textures,
-                } => self.draw_external_textures(texture_id, textures),
-            }.context(format!("scene too large: {} paths, {} shadows, {} quads, {} underlines, {} mono, {} poly, {} surfaces, {} external",
+            }.context(format!("scene too large: {} paths, {} shadows, {} quads, {} underlines, {} mono, {} poly, {} surfaces",
                     scene.paths.len(),
                     scene.shadows.len(),
                     scene.quads.len(),
                     scene.underlines.len(),
                     scene.monochrome_sprites.len(),
                     scene.polychrome_sprites.len(),
-                    scene.surfaces.len(),
-                    scene.external_textures.len(),))?;
+                    scene.surfaces.len(),))?;
         }
         self.present()
     }
@@ -582,82 +576,6 @@ impl DirectXRenderer {
         Ok(())
     }
 
-    fn draw_external_textures(
-        &mut self,
-        texture_id: crate::ExternalTextureId,
-        textures: &[crate::ExternalTexture],
-    ) -> Result<()> {
-        if textures.is_empty() {
-            return Ok(());
-        }
-        // Get the external texture view from the atlas
-        let texture_view = self.atlas.get_external_texture_view(texture_id)?;
-
-        // Update instance buffer with external texture data
-        self.pipelines.external_textures.update_buffer(
-            &self.devices.device,
-            &self.devices.device_context,
-            textures,
-        )?;
-
-        // Draw using the external texture pipeline
-        self.pipelines.external_textures.draw_with_texture(
-            &self.devices.device_context,
-            &texture_view,
-            &self.resources.viewport,
-            &self.globals.global_params_buffer,
-            &self.globals.sampler,
-            textures.len() as u32,
-        )
-    }
-
-    /// IMMEDIATE MODE: Draw a raw DirectX texture pointer directly
-    /// This bypasses the scene graph and atlas for maximum performance
-    /// Used for game viewports that need instant, non-retained rendering
-    pub fn draw_raw_texture_immediate(
-        &mut self,
-        srv_ptr: *mut std::ffi::c_void,
-        bounds: Bounds<ScaledPixels>,
-    ) -> Result<()> {
-        if srv_ptr.is_null() {
-            return Ok(());
-        }
-
-        // Cast to ID3D11ShaderResourceView
-        let srv = unsafe {
-            ID3D11ShaderResourceView::from_raw(srv_ptr as *mut _)
-        };
-
-        // Create a single quad instance for this texture
-        let texture = crate::ExternalTexture {
-            order: 0,
-            pad: 0,
-            bounds,
-            content_mask: ContentMask::default(),
-            corner_radii: Corners::default(),
-            opacity: 1.0,
-            grayscale: false,
-            texture_id: crate::ExternalTextureId(0), // Unused for immediate mode
-        };
-
-        // Update instance buffer
-        self.pipelines.external_textures.update_buffer(
-            &self.devices.device,
-            &self.devices.device_context,
-            &[texture],
-        )?;
-
-        // Draw IMMEDIATELY - no deferral, no batching
-        self.pipelines.external_textures.draw_with_texture(
-            &self.devices.device_context,
-            &[Some(srv)],
-            &self.resources.viewport,
-            &self.globals.global_params_buffer,
-            &self.globals.sampler,
-            1,
-        )
-    }
-
     pub(crate) fn gpu_specs(&self) -> Result<GpuSpecs> {
         let desc = unsafe { self.devices.adapter.GetDesc1() }?;
         let is_software_emulated = (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32) != 0;
@@ -856,13 +774,6 @@ impl DirectXRenderPipelines {
             16,
             create_blend_state(device)?,
         )?;
-        let external_textures = PipelineState::new(
-            device,
-            "external_texture_pipeline",
-            ShaderModule::ExternalTexture,
-            16,
-            create_blend_state(device)?,
-        )?;
 
         Ok(Self {
             shadow_pipeline,
@@ -872,7 +783,6 @@ impl DirectXRenderPipelines {
             underline_pipeline,
             mono_sprites,
             poly_sprites,
-            external_textures,
         })
     }
 }
@@ -1499,7 +1409,6 @@ pub(crate) mod shader_resources {
         PathSprite,
         MonochromeSprite,
         PolychromeSprite,
-        ExternalTexture,
         EmojiRasterization,
     }
 
@@ -1569,10 +1478,6 @@ pub(crate) mod shader_resources {
                 ShaderModule::PolychromeSprite => match target {
                     ShaderTarget::Vertex => POLYCHROME_SPRITE_VERTEX_BYTES,
                     ShaderTarget::Fragment => POLYCHROME_SPRITE_FRAGMENT_BYTES,
-                },
-                ShaderModule::ExternalTexture => match target {
-                    ShaderTarget::Vertex => EXTERNAL_TEXTURE_VERTEX_BYTES,
-                    ShaderTarget::Fragment => EXTERNAL_TEXTURE_FRAGMENT_BYTES,
                 },
                 ShaderModule::EmojiRasterization => match target {
                     ShaderTarget::Vertex => EMOJI_RASTERIZATION_VERTEX_BYTES,
@@ -1663,7 +1568,6 @@ pub(crate) mod shader_resources {
                 ShaderModule::PathSprite => "path_sprite",
                 ShaderModule::MonochromeSprite => "monochrome_sprite",
                 ShaderModule::PolychromeSprite => "polychrome_sprite",
-                ShaderModule::ExternalTexture => "external_texture",
                 ShaderModule::EmojiRasterization => "emoji_rasterization",
             }
         }
