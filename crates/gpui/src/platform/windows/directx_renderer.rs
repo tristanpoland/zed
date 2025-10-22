@@ -570,9 +570,72 @@ impl DirectXRenderer {
     }
 
     fn draw_surfaces(&mut self, surfaces: &[PaintSurface]) -> Result<()> {
+        use crate::scene::SurfaceSource;
+        use windows::Win32::Graphics::Direct3D11::*;
+        use std::collections::HashMap;
+
         if surfaces.is_empty() {
             return Ok(());
         }
+
+        static SHARED_TEXTURE_CACHE: std::sync::Mutex<HashMap<isize, ID3D11ShaderResourceView>> =
+            std::sync::Mutex::new(HashMap::new());
+
+        for surface in surfaces {
+            match &surface.source {
+                #[cfg(target_os = "windows")]
+                SurfaceSource::SharedTexture { nt_handle, width, height } => {
+                    let mut cache = SHARED_TEXTURE_CACHE.lock().unwrap();
+                    
+                    let srv = if let Some(srv) = cache.get(nt_handle) {
+                        srv.clone()
+                    } else {
+                        let texture: ID3D11Texture2D = unsafe {
+                            self.devices.device.OpenSharedResource(
+                                windows::Win32::Foundation::HANDLE(*nt_handle as _)
+                            )?
+                        };
+
+                        let srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
+                            Format: RENDER_TARGET_FORMAT,
+                            ViewDimension: D3D11_SRV_DIMENSION_TEXTURE2D,
+                            Anonymous: D3D11_SHADER_RESOURCE_VIEW_DESC_0 {
+                                Texture2D: D3D11_TEX2D_SRV {
+                                    MostDetailedMip: 0,
+                                    MipLevels: 1,
+                                },
+                            },
+                        };
+
+                        let srv = unsafe {
+                            self.devices.device.CreateShaderResourceView(&texture, Some(&srv_desc))?
+                        };
+
+                        cache.insert(*nt_handle, srv.clone());
+                        srv
+                    };
+
+                    let texture_size = crate::size((*width as f32).into(), (*height as f32).into());
+                    let display_bounds = surface.object_fit.get_bounds(
+                        surface.bounds.map(Into::into),
+                        texture_size,
+                    );
+
+                    self.pipelines.poly_sprites.draw_with_texture(
+                        &self.devices.device_context,
+                        &[Some(srv)],
+                        &self.resources.viewport,
+                        &self.globals.global_params_buffer,
+                        &self.globals.sampler,
+                        &surface.bounds.map(Into::into),
+                        &display_bounds,
+                    )?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => {}
+            }
+        }
+
         Ok(())
     }
 

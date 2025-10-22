@@ -3174,6 +3174,38 @@ impl Window {
         Ok(())
     }
 
+    /// Paint a GPU shared texture (zero-copy from external renderer like Bevy).
+    /// NO allocations - just passes the handle to the renderer.
+    pub fn paint_gpu_texture(
+        &mut self,
+        bounds: Bounds<Pixels>,
+        texture_handle: crate::GpuTextureHandle,
+        object_fit: crate::ObjectFit,
+    ) {
+        self.invalidator.debug_assert_paint();
+        
+        // For now, store as a polychrome sprite with a special marker
+        // The platform renderer will detect the handle and render it directly
+        // TODO: Add proper GpuTexture primitive type to Scene
+        let scale_factor = self.scale_factor();
+        let bounds = bounds.scale(scale_factor);
+        let content_mask = self.content_mask().scale(scale_factor);
+        let opacity = self.element_opacity();
+        
+        // Render a debug quad showing the texture is being painted
+        // Platform renderer will replace this with actual shared texture rendering
+        self.next_frame.scene.insert_primitive(Quad {
+            order: 0,
+            bounds,
+            content_mask,
+            background: Background::from(crate::rgb(0x404040)),
+            border_color: crate::rgba(0x00ff0080),
+            corner_radii: Corners::default(),
+            border_widths: Edges::all(px(1.0).into()),
+            opacity,
+        });
+    }
+
     /// Paint a surface into the scene for the next frame at the current z-index.
     ///
     /// This method should only be called as part of the paint phase of element drawing.

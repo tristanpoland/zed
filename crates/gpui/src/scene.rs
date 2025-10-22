@@ -658,8 +658,26 @@ pub(crate) struct PaintSurface {
     pub order: DrawOrder,
     pub bounds: Bounds<ScaledPixels>,
     pub content_mask: ContentMask<ScaledPixels>,
+    pub object_fit: crate::ObjectFit,
+    pub source: SurfaceSource,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum SurfaceSource {
     #[cfg(target_os = "macos")]
-    pub image_buffer: core_video::pixel_buffer::CVPixelBuffer,
+    ImageBuffer(core_video::pixel_buffer::CVPixelBuffer),
+    #[cfg(target_os = "windows")]
+    SharedTexture {
+        nt_handle: isize,
+        width: u32,
+        height: u32,
+    },
+    #[cfg(target_os = "linux")]
+    DmaBuf {
+        fd: i32,
+        width: u32,
+        height: u32,
+    },
 }
 
 impl From<PaintSurface> for Primitive {
