@@ -585,23 +585,33 @@ impl DirectXRenderer {
             match &surface.source {
                 #[cfg(target_os = "windows")]
                 SurfaceSource::SharedTexture { nt_handle, width, height } => {
+                    // Get or create shader resource view - use try_lock to avoid freezing
                     let cache_mutex = SHARED_TEXTURE_CACHE.get_or_init(|| {
                         std::sync::Mutex::new(HashMap::new())
                     });
-                    let mut cache = cache_mutex.lock().unwrap();
+                    
+                    let mut cache = match cache_mutex.try_lock() {
+                        Ok(cache) => cache,
+                        Err(_) => continue, // Skip if cache is busy
+                    };
                     
                     let srv = if let Some(srv) = cache.get(nt_handle) {
                         srv.clone()
                     } else {
+                        // Open shared texture
                         let mut texture: Option<ID3D11Texture2D> = None;
-                        unsafe {
+                        if unsafe {
                             self.devices.device.OpenSharedResource(
                                 windows::Win32::Foundation::HANDLE(*nt_handle as _),
                                 &mut texture,
-                            )?
-                        };
+                            )
+                        }.is_err() || texture.is_none() {
+                            continue;
+                        }
+                        
                         let texture = texture.unwrap();
 
+                        // Create shader resource view
                         let srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
                             Format: RENDER_TARGET_FORMAT,
                             ViewDimension: D3D11_SRV_DIMENSION_TEXTURE2D,
@@ -614,57 +624,73 @@ impl DirectXRenderer {
                         };
 
                         let mut srv: Option<ID3D11ShaderResourceView> = None;
-                        unsafe {
-                            self.devices.device.CreateShaderResourceView(&texture, Some(&srv_desc), Some(&mut srv))?
-                        };
+                        if unsafe {
+                            self.devices.device.CreateShaderResourceView(&texture, Some(&srv_desc), Some(&mut srv))
+                        }.is_err() || srv.is_none() {
+                            continue;
+                        }
+                        
                         let srv = srv.unwrap();
-
                         cache.insert(*nt_handle, srv.clone());
                         srv
                     };
+                    
+                    drop(cache); // Release lock before drawing
 
+                    // Calculate display bounds
                     let texture_size = crate::size(
                         DevicePixels::from(*width as i32), 
                         DevicePixels::from(*height as i32)
                     );
                     
-                    // Convert ScaledPixels to Pixels for get_bounds  
-                    let scale_factor = 1.0; // Already scaled in scene
-                    let bounds_pixels = surface.bounds.map(|sp| Pixels(sp.0 / scale_factor));
+                    let scale_factor = self.resources.viewport[0].Width / self.resources.width as f32;
+                    let bounds_pixels = surface.bounds.map(|sp| Pixels(sp.0));
                     
                     let display_bounds = surface.object_fit.get_bounds(
                         bounds_pixels,
                         texture_size,
                     );
 
-                    // Create sprite to actually draw the texture
+                    // Create sprite - match the structure used by draw_polychrome_sprites
                     let sprite = PolychromeSprite {
+                        order: surface.order,
+                        pad: 0,
+                        opacity: 1.0,
                         bounds: display_bounds.scale(scale_factor),
+                        content_mask: surface.content_mask.clone(),
+                        corner_radii: Corners::default(),
                         tile: AtlasTile {
-                            texture_id: AtlasTextureId::default(), // Unused for shared textures
-                            tile_id: Default::default(),
+                            texture_id: AtlasTextureId { 
+                                index: 0,
+                                kind: crate::AtlasTextureKind::Polychrome,
+                            },
+                            tile_id: TileId(0),
                             padding: 0,
                             bounds: crate::Bounds {
-                                origin: crate::point(ScaledPixels(0.0), ScaledPixels(0.0)),
-                                size: crate::size(ScaledPixels(*width as f32), ScaledPixels(*height as f32)),
+                                origin: crate::point(DevicePixels(0), DevicePixels(0)),
+                                size: crate::size(DevicePixels(*width as i32), DevicePixels(*height as i32)),
                             },
                         },
+                        grayscale: false,
                     };
 
-                    self.pipelines.poly_sprites.update_buffer(
+                    // Update and draw
+                    if self.pipelines.poly_sprites.update_buffer(
                         &self.devices.device,
                         &self.devices.device_context,
                         &[sprite],
-                    )?;
+                    ).is_err() {
+                        continue;
+                    }
 
-                    self.pipelines.poly_sprites.draw_with_texture(
+                    let _ = self.pipelines.poly_sprites.draw_with_texture(
                         &self.devices.device_context,
                         &[Some(srv)],
                         &self.resources.viewport,
                         &self.globals.global_params_buffer,
                         &self.globals.sampler,
-                        1, // instance_count
-                    )?;
+                        1,
+                    );
                 }
                 #[allow(unreachable_patterns)]
                 _ => {}
