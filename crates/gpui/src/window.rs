@@ -3182,23 +3182,37 @@ impl Window {
         texture_handle: crate::GpuTextureHandle,
         object_fit: crate::ObjectFit,
     ) {
+        use crate::PaintSurface;
+        use crate::scene::SurfaceSource;
+        
         self.invalidator.debug_assert_paint();
         
-        // For now, render a debug quad showing the texture is being painted
-        // Platform renderer will replace this with actual shared texture rendering
         let scale_factor = self.scale_factor();
         let bounds = bounds.scale(scale_factor);
         let content_mask = self.content_mask().scale(scale_factor);
         
-        self.next_frame.scene.insert_primitive(Quad {
+        // Convert GpuTextureHandle to SurfaceSource
+        let source = match texture_handle {
+            #[cfg(target_os = "windows")]
+            crate::GpuTextureHandle::Windows { nt_handle, width, height } => {
+                SurfaceSource::SharedTexture { nt_handle, width, height }
+            }
+            #[cfg(target_os = "macos")]
+            crate::GpuTextureHandle::Metal { io_surface } => {
+                SurfaceSource::ImageBuffer(io_surface)
+            }
+            #[cfg(target_os = "linux")]
+            crate::GpuTextureHandle::Vulkan { dma_buf_fd, width, height } => {
+                SurfaceSource::DmaBuf { fd: dma_buf_fd, width, height }
+            }
+        };
+        
+        self.next_frame.scene.insert_primitive(PaintSurface {
             order: 0,
             bounds,
             content_mask,
-            background: Background::from(crate::rgb(0x404040)),
-            border_color: crate::rgb(0x00ff00).into(),
-            corner_radii: Corners::default(),
-            border_widths: Edges::all(ScaledPixels(1.0)),
-            border_style: BorderStyle::Solid,
+            object_fit,
+            source,
         });
     }
 
