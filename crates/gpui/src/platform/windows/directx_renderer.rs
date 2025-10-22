@@ -579,12 +579,16 @@ impl DirectXRenderer {
             return Ok(());
         }
 
+        println!("[DX-RENDERER] 🎨 draw_surfaces called with {} surfaces", surfaces.len());
+
         static SHARED_TEXTURE_CACHE: OnceLock<std::sync::Mutex<HashMap<isize, ID3D11ShaderResourceView>>> = OnceLock::new();
 
         for surface in surfaces {
             match &surface.source {
                 #[cfg(target_os = "windows")]
                 SurfaceSource::SharedTexture { nt_handle, width, height } => {
+                    println!("[DX-RENDERER] 📍 Processing SharedTexture: handle=0x{:X}, size={}x{}", nt_handle, width, height);
+                    
                     // Get or create shader resource view - use try_lock to avoid freezing
                     let cache_mutex = SHARED_TEXTURE_CACHE.get_or_init(|| {
                         std::sync::Mutex::new(HashMap::new())
@@ -592,24 +596,40 @@ impl DirectXRenderer {
                     
                     let mut cache = match cache_mutex.try_lock() {
                         Ok(cache) => cache,
-                        Err(_) => continue, // Skip if cache is busy
+                        Err(_) => {
+                            println!("[DX-RENDERER] ⚠️  Cache busy, skipping");
+                            continue;
+                        }
                     };
                     
                     let srv = if let Some(srv) = cache.get(nt_handle) {
+                        println!("[DX-RENDERER] ✅ Using cached SRV");
                         srv.clone()
                     } else {
-                        // Open shared texture
-                        let mut texture: Option<ID3D11Texture2D> = None;
-                        if unsafe {
-                            self.devices.device.OpenSharedResource(
+                        println!("[DX-RENDERER] 🔨 Creating new SRV...");
+                        // Open DX12 shared texture using DX11Device1::OpenSharedResource1
+                        // This is required for cross-API (DX12 -> DX11) sharing
+                        let device1: ID3D11Device1 = match self.devices.device.cast() {
+                            Ok(d) => d,
+                            Err(e) => {
+                                println!("[DX-RENDERER] ❌ Failed to get ID3D11Device1: {:?}", e);
+                                continue;
+                            }
+                        };
+
+                        let texture: ID3D11Texture2D = match unsafe {
+                            device1.OpenSharedResource1(
                                 windows::Win32::Foundation::HANDLE(*nt_handle as _),
-                                &mut texture,
                             )
-                        }.is_err() || texture.is_none() {
-                            continue;
-                        }
+                        } {
+                            Ok(tex) => tex,
+                            Err(e) => {
+                                println!("[DX-RENDERER] ❌ Failed to open DX12 shared texture: {:?}", e);
+                                continue;
+                            }
+                        };
                         
-                        let texture = texture.unwrap();
+                        println!("[DX-RENDERER] ✅ Opened DX12 shared texture");
 
                         // Create shader resource view
                         let srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
@@ -627,10 +647,12 @@ impl DirectXRenderer {
                         if unsafe {
                             self.devices.device.CreateShaderResourceView(&texture, Some(&srv_desc), Some(&mut srv))
                         }.is_err() || srv.is_none() {
+                            println!("[DX-RENDERER] ❌ Failed to create SRV!");
                             continue;
                         }
                         
                         let srv = srv.unwrap();
+                        println!("[DX-RENDERER] ✅ Created SRV");
                         cache.insert(*nt_handle, srv.clone());
                         srv
                     };
@@ -650,6 +672,8 @@ impl DirectXRenderer {
                         bounds_pixels,
                         texture_size,
                     );
+                    
+                    println!("[DX-RENDERER] 📐 Display bounds: {:?}, scale: {}", display_bounds, scale_factor);
 
                     // Create sprite - match the structure used by draw_polychrome_sprites
                     let sprite = PolychromeSprite {
@@ -680,20 +704,28 @@ impl DirectXRenderer {
                         &self.devices.device_context,
                         &[sprite],
                     ).is_err() {
+                        println!("[DX-RENDERER] ❌ Failed to update buffer!");
                         continue;
                     }
 
-                    let _ = self.pipelines.poly_sprites.draw_with_texture(
+                    println!("[DX-RENDERER] 🎨 Drawing sprite...");
+                    if let Err(e) = self.pipelines.poly_sprites.draw_with_texture(
                         &self.devices.device_context,
                         &[Some(srv)],
                         &self.resources.viewport,
                         &self.globals.global_params_buffer,
                         &self.globals.sampler,
                         1,
-                    );
+                    ) {
+                        println!("[DX-RENDERER] ❌ Draw failed: {:?}", e);
+                    } else {
+                        println!("[DX-RENDERER] ✅ Draw successful!");
+                    }
                 }
                 #[allow(unreachable_patterns)]
-                _ => {}
+                _ => {
+                    println!("[DX-RENDERER] ⚠️  Non-Windows surface source");
+                }
             }
         }
 

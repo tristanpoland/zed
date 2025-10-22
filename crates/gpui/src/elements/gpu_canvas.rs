@@ -70,6 +70,11 @@ impl GpuCanvasSource {
         self.active_buffer
             .fetch_xor(1, std::sync::atomic::Ordering::Release);
     }
+    
+    /// Set the active buffer index directly (0 or 1).
+    pub fn set_active_buffer(&self, index: usize) {
+        self.active_buffer.store(index % 2, std::sync::atomic::Ordering::Release);
+    }
 }
 
 /// A GPU canvas element for zero-copy rendering of external GPU content.
