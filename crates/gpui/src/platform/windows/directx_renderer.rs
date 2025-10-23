@@ -580,8 +580,6 @@ impl DirectXRenderer {
             return Ok(());
         }
 
-        println!("[DX-RENDERER] 🎨 draw_surfaces called with {} surfaces", surfaces.len());
-
         static SHARED_TEXTURE_CACHE: OnceLock<std::sync::Mutex<HashMap<isize, ID3D11ShaderResourceView>>> = OnceLock::new();
 
         for surface in surfaces {
@@ -681,8 +679,6 @@ impl DirectXRenderer {
                         texture_size,
                     );
                     
-                    println!("[DX-RENDERER] 📐 Display bounds: {:?}, scale: {}", display_bounds, scale_factor);
-
                     // Create sprite - match the structure used by draw_polychrome_sprites
                     let sprite = PolychromeSprite {
                         order: surface.order,
@@ -716,7 +712,6 @@ impl DirectXRenderer {
                         continue;
                     }
 
-                    println!("[DX-RENDERER] 🎨 Drawing sprite...");
                     if let Err(e) = self.pipelines.poly_sprites.draw_with_texture(
                         &self.devices.device_context,
                         &[Some(srv)],
