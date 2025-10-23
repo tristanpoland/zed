@@ -18,6 +18,7 @@ use windows::{
     },
     core::Interface,
 };
+use log::{trace, debug, info, warn, error};
 
 use crate::{
     platform::windows::directx_renderer::shader_resources::{
@@ -586,9 +587,7 @@ impl DirectXRenderer {
         for surface in surfaces {
             match &surface.source {
                 #[cfg(target_os = "windows")]
-                SurfaceSource::SharedTexture { nt_handle, width, height } => {
-                    println!("[DX-RENDERER] 📍 Processing SharedTexture: handle=0x{:X}, size={}x{}", nt_handle, width, height);
-                    
+                SurfaceSource::SharedTexture { nt_handle, width, height } => {                    
                     // Get or create shader resource view - use try_lock to avoid freezing
                     let cache_mutex = SHARED_TEXTURE_CACHE.get_or_init(|| {
                         std::sync::Mutex::new(HashMap::new())
@@ -603,10 +602,10 @@ impl DirectXRenderer {
                     };
                     
                     let srv = if let Some(srv) = cache.get(nt_handle) {
-                        println!("[DX-RENDERER] ✅ Using cached SRV");
+                        // println!("[DX-RENDERER] ✅ Using cached SRV for handle 0x{:X}", nt_handle);
                         srv.clone()
                     } else {
-                        println!("[DX-RENDERER] 🔨 Creating new SRV...");
+                        println!("[DX-RENDERER] 🔨 Creating new SRV for handle 0x{:X}...", nt_handle);
                         // Open DX12 shared texture using DX11Device1::OpenSharedResource1
                         // This is required for cross-API (DX12 -> DX11) sharing
                         let device1: ID3D11Device1 = match self.devices.device.cast() {
@@ -622,14 +621,23 @@ impl DirectXRenderer {
                                 windows::Win32::Foundation::HANDLE(*nt_handle as _),
                             )
                         } {
-                            Ok(tex) => tex,
+                            Ok(tex) => {
+                                println!("[DX-RENDERER] ✅ Opened shared texture handle 0x{:X}", nt_handle);
+                                tex
+                            },
                             Err(e) => {
-                                println!("[DX-RENDERER] ❌ Failed to open DX12 shared texture: {:?}", e);
+                                println!("[DX-RENDERER] ❌ Failed to open DX12 shared texture 0x{:X}: {:?}", nt_handle, e);
                                 continue;
                             }
                         };
                         
-                        println!("[DX-RENDERER] ✅ Opened DX12 shared texture");
+                        // Read back a few pixels to verify content
+                        unsafe {
+                            let mut desc = Default::default();
+                            texture.GetDesc(&mut desc);
+                            println!("[DX-RENDERER] 📊 Texture desc: {}x{}, format: {:?}, usage: {:?}", 
+                                desc.Width, desc.Height, desc.Format, desc.Usage);
+                        }
 
                         // Create shader resource view
                         let srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
@@ -652,7 +660,7 @@ impl DirectXRenderer {
                         }
                         
                         let srv = srv.unwrap();
-                        println!("[DX-RENDERER] ✅ Created SRV");
+                        println!("[DX-RENDERER] ✅ Created SRV for handle 0x{:X}", nt_handle);
                         cache.insert(*nt_handle, srv.clone());
                         srv
                     };
@@ -719,7 +727,7 @@ impl DirectXRenderer {
                     ) {
                         println!("[DX-RENDERER] ❌ Draw failed: {:?}", e);
                     } else {
-                        println!("[DX-RENDERER] ✅ Draw successful!");
+                        // Draw succeeded
                     }
                 }
                 #[allow(unreachable_patterns)]
@@ -778,7 +786,7 @@ impl DirectXRenderer {
     // https://github.com/microsoft/terminal/blob/1283c0f5b99a2961673249fa77c6b986efb5086c/src/renderer/atlas/dwrite.cpp#L50
     fn get_gamma_ratios(gamma: f32) -> [f32; 4] {
         const GAMMA_INCORRECT_TARGET_RATIOS: [[f32; 4]; 13] = [
-            [0.0000 / 4.0, 0.0000 / 4.0, 0.0000 / 4.0, 0.0000 / 4.0], // gamma = 1.0
+            [0.0000 / 4.0,  0.0000 / 4.0, 0.0000 / 4.0,  0.0000 / 4.0],  // gamma = 1.0
             [0.0166 / 4.0, -0.0807 / 4.0, 0.2227 / 4.0, -0.0751 / 4.0], // gamma = 1.1
             [0.0350 / 4.0, -0.1760 / 4.0, 0.4325 / 4.0, -0.1370 / 4.0], // gamma = 1.2
             [0.0543 / 4.0, -0.2821 / 4.0, 0.6302 / 4.0, -0.1876 / 4.0], // gamma = 1.3
