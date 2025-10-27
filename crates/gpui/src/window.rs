@@ -3191,20 +3191,32 @@ impl Window {
         let bounds = bounds.scale(scale_factor);
         let content_mask = self.content_mask().scale(scale_factor);
         
-        // Convert GpuTextureHandle to SurfaceSource
-        let source = match texture_handle {
-            #[cfg(target_os = "windows")]
-            crate::GpuTextureHandle::Windows { nt_handle, width, height } => {
-                SurfaceSource::SharedTexture { nt_handle, width, height }
-            }
-            #[cfg(target_os = "macos")]
-            crate::GpuTextureHandle::Metal { io_surface } => {
-                SurfaceSource::ImageBuffer(io_surface)
-            }
-            #[cfg(target_os = "linux")]
-            crate::GpuTextureHandle::Vulkan { dma_buf_fd, width, height } => {
-                SurfaceSource::DmaBuf { fd: dma_buf_fd, width, height }
-            }
+        // Convert universal GpuTextureHandle to platform-specific SurfaceSource
+        // All platforms use the same RGBA8 byte format - just different OS handles
+        #[cfg(target_os = "windows")]
+        let source = SurfaceSource::SharedTexture {
+            nt_handle: texture_handle.native_handle,
+            width: texture_handle.width,
+            height: texture_handle.height,
+        };
+
+        #[cfg(target_os = "macos")]
+        let source = {
+            // On macOS, native_handle is an IOSurface ID
+            // Create IOSurface from the handle
+            use metal::IOSurface;
+            let io_surface = unsafe {
+                // IOSurface::from_id creates an IOSurface from its integer ID
+                IOSurface::from_id(texture_handle.native_handle as u32)
+            };
+            SurfaceSource::ImageBuffer(io_surface)
+        };
+
+        #[cfg(target_os = "linux")]
+        let source = SurfaceSource::DmaBuf {
+            fd: texture_handle.native_handle as i32,
+            width: texture_handle.width,
+            height: texture_handle.height,
         };
         
         self.next_frame.scene.insert_primitive(PaintSurface {

@@ -5,36 +5,84 @@ use crate::{
 use refineable::Refineable;
 use std::sync::Arc;
 
-/// Platform-specific GPU texture handle for zero-copy rendering.
-/// This represents a shared GPU texture that can be rendered without CPU copies.
+/// Universal GPU texture handle for zero-copy rendering.
+///
+/// At the fundamental level, all GPU textures are just RGBA8 bytes in memory.
+/// This handle is a platform-agnostic reference to that memory - whether it's:
+/// - Windows: DirectX shared resource handle (NT handle)
+/// - macOS: Metal IOSurface handle
+/// - Linux: Vulkan external memory handle (dma-buf FD)
+///
+/// The key insight: these are all different OS-level ways to reference the
+/// SAME underlying GPU memory with the SAME RGBA8 byte format.
 #[derive(Clone, Debug)]
-pub enum GpuTextureHandle {
-    /// Windows DX11/DX12 shared texture handle
-    #[cfg(target_os = "windows")]
-    Windows {
-        /// NT handle to the shared DX12/DX11 texture
-        nt_handle: isize,
-        /// Width of the texture
+pub struct GpuTextureHandle {
+    /// Platform-native handle to the shared GPU texture memory
+    /// - Windows: NT handle (isize)
+    /// - macOS: IOSurface ID (isize)
+    /// - Linux: dma-buf file descriptor (isize)
+    pub native_handle: isize,
+
+    /// Width of the texture in pixels
+    pub width: u32,
+
+    /// Height of the texture in pixels
+    pub height: u32,
+
+    /// Texture format (typically RGBA8, universal across all platforms)
+    pub format: GpuTextureFormat,
+}
+
+/// GPU texture format - universal across all platforms
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GpuTextureFormat {
+    /// 8-bit RGBA (4 bytes per pixel) - most common
+    RGBA8,
+    /// 8-bit BGRA (4 bytes per pixel) - some platforms prefer this
+    BGRA8,
+    /// 16-bit float RGBA (8 bytes per pixel) - HDR
+    RGBA16F,
+}
+
+impl GpuTextureHandle {
+    /// Create a new GPU texture handle with RGBA8 format (default)
+    pub fn new(native_handle: isize, width: u32, height: u32) -> Self {
+        Self {
+            native_handle,
+            width,
+            height,
+            format: GpuTextureFormat::RGBA8,
+        }
+    }
+
+    /// Create a new GPU texture handle with a specific format
+    pub fn new_with_format(
+        native_handle: isize,
         width: u32,
-        /// Height of the texture
         height: u32,
-    },
-    /// macOS Metal shared texture handle
-    #[cfg(target_os = "macos")]
-    Metal {
-        /// IOSurface handle for Metal/OpenGL sharing
-        io_surface: metal::IOSurface,
-    },
-    /// Linux Vulkan shared texture handle
-    #[cfg(target_os = "linux")]
-    Vulkan {
-        /// DMA-BUF file descriptor for Vulkan/OpenGL sharing
-        dma_buf_fd: i32,
-        /// Width of the texture
-        width: u32,
-        /// Height of the texture
-        height: u32,
-    },
+        format: GpuTextureFormat,
+    ) -> Self {
+        Self {
+            native_handle,
+            width,
+            height,
+            format,
+        }
+    }
+
+    /// Get the size in bytes of a single pixel for this format
+    pub fn bytes_per_pixel(&self) -> u32 {
+        match self.format {
+            GpuTextureFormat::RGBA8 => 4,
+            GpuTextureFormat::BGRA8 => 4,
+            GpuTextureFormat::RGBA16F => 8,
+        }
+    }
+
+    /// Get the total size in bytes of the texture
+    pub fn size_in_bytes(&self) -> usize {
+        (self.width * self.height * self.bytes_per_pixel()) as usize
+    }
 }
 
 unsafe impl Send for GpuTextureHandle {}
