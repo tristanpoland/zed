@@ -1086,6 +1086,49 @@ pub trait InputHandler: 'static {
     }
 }
 
+/// Configuration for rendering to an external window/surface.
+/// This allows GPUI to render as an overlay on top of custom rendering.
+#[derive(Debug)]
+pub struct ExternalSurface {
+    /// Raw window handle (HWND on Windows, NSWindow on macOS, etc.)
+    pub raw_window_handle: raw_window_handle::RawWindowHandle,
+
+    /// Raw display handle
+    pub raw_display_handle: raw_window_handle::RawDisplayHandle,
+
+    /// Platform-specific surface handle
+    pub platform_surface: PlatformSurfaceHandle,
+}
+
+/// Platform-specific surface handles for external rendering
+#[derive(Debug)]
+pub enum PlatformSurfaceHandle {
+    #[cfg(target_os = "windows")]
+    /// Windows DirectX swap chain for overlay rendering with transparency
+    DirectX {
+        /// The IDXGISwapChain1 pointer (must support premultiplied alpha)
+        swap_chain: *mut std::ffi::c_void,
+    },
+
+    #[cfg(target_os = "macos")]
+    /// macOS Metal layer for overlay rendering
+    Metal {
+        /// The CAMetalLayer pointer
+        layer: *mut std::ffi::c_void,
+    },
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    /// Linux Wayland/X11 surface
+    Wayland {
+        /// The wl_surface pointer
+        surface: *mut std::ffi::c_void,
+    },
+}
+
+// Safety: These are raw pointers that should only be used on the main thread
+unsafe impl Send for PlatformSurfaceHandle {}
+unsafe impl Sync for PlatformSurfaceHandle {}
+
 /// The variables that can be configured when creating a new window
 #[derive(Debug)]
 pub struct WindowOptions {
@@ -1134,6 +1177,12 @@ pub struct WindowOptions {
 
     /// Tab group name, allows opening the window as a native tab on macOS 10.12+. Windows with the same tabbing identifier will be grouped together.
     pub tabbing_identifier: Option<String>,
+
+    /// External surface configuration for rendering to an existing window/surface.
+    /// When provided, GPUI will render to the given surface instead of creating its own.
+    /// This allows embedding GPUI UI as an overlay on top of custom rendering (e.g., 3D scenes).
+    /// The surface must support transparency (premultiplied alpha) for proper layering.
+    pub external_surface: Option<ExternalSurface>,
 }
 
 /// The variables that can be configured when creating a new window
@@ -1183,6 +1232,9 @@ pub(crate) struct WindowParams {
     pub window_min_size: Option<Size<Pixels>>,
     #[cfg(target_os = "macos")]
     pub tabbing_identifier: Option<String>,
+
+    /// External surface configuration for rendering to an existing window/surface
+    pub external_surface: Option<ExternalSurface>,
 }
 
 /// Represents the status of how a window should be opened.

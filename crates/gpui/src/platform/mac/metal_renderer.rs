@@ -47,8 +47,9 @@ pub unsafe fn new_renderer(
     _native_view: *mut c_void,
     _bounds: crate::Size<f32>,
     _transparent: bool,
+    external_layer: Option<*mut c_void>,
 ) -> Renderer {
-    MetalRenderer::new(context)
+    MetalRenderer::new(context, external_layer)
 }
 
 pub(crate) struct InstanceBufferPool {
@@ -128,7 +129,7 @@ pub struct PathRasterizationVertex {
 }
 
 impl MetalRenderer {
-    pub fn new(instance_buffer_pool: Arc<Mutex<InstanceBufferPool>>) -> Self {
+    pub fn new(instance_buffer_pool: Arc<Mutex<InstanceBufferPool>>, external_layer: Option<*mut std::ffi::c_void>) -> Self {
         // Prefer low‐power integrated GPUs on Intel Mac. On Apple
         // Silicon, there is only ever one GPU, so this is equivalent to
         // `metal::Device::system_default()`.
@@ -139,20 +140,30 @@ impl MetalRenderer {
             std::process::exit(1);
         };
 
-        let layer = metal::MetalLayer::new();
-        layer.set_device(&device);
-        layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
-        layer.set_opaque(false);
-        layer.set_maximum_drawable_count(3);
-        unsafe {
-            let _: () = msg_send![&*layer, setAllowsNextDrawableTimeout: NO];
-            let _: () = msg_send![&*layer, setNeedsDisplayOnBoundsChange: YES];
-            let _: () = msg_send![
-                &*layer,
-                setAutoresizingMask: AutoresizingMask::WIDTH_SIZABLE
-                    | AutoresizingMask::HEIGHT_SIZABLE
-            ];
-        }
+        let layer = if let Some(external_ptr) = external_layer {
+            // Use externally provided Metal layer for overlay rendering
+            log::info!("Using external CAMetalLayer for GPUI rendering");
+            unsafe {
+                let layer_ref = external_ptr as *mut objc::runtime::Object;
+                metal::MetalLayer::from_ptr(layer_ref)
+            }
+        } else {
+            let layer = metal::MetalLayer::new();
+            layer.set_device(&device);
+            layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+            layer.set_opaque(false);
+            layer.set_maximum_drawable_count(3);
+            unsafe {
+                let _: () = msg_send![&*layer, setAllowsNextDrawableTimeout: NO];
+                let _: () = msg_send![&*layer, setNeedsDisplayOnBoundsChange: YES];
+                let _: () = msg_send![
+                    &*layer,
+                    setAutoresizingMask: AutoresizingMask::WIDTH_SIZABLE
+                        | AutoresizingMask::HEIGHT_SIZABLE
+                ];
+            }
+            layer
+        };
         #[cfg(feature = "runtime_shaders")]
         let library = device
             .new_library_with_source(&SHADERS_SOURCE_FILE, &metal::CompileOptions::new())

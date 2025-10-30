@@ -137,14 +137,46 @@ impl WaylandWindowState {
         options: WindowParams,
     ) -> anyhow::Result<Self> {
         let renderer = {
-            let raw_window = RawWindow {
-                window: surface.id().as_ptr().cast::<c_void>(),
-                display: surface
-                    .backend()
-                    .upgrade()
-                    .unwrap()
-                    .display_ptr()
-                    .cast::<c_void>(),
+            // Check if we have an external surface to render to
+            let raw_window = if let Some(ref ext_surface) = options.external_surface {
+                match ext_surface.platform_surface {
+                    crate::PlatformSurfaceHandle::Wayland { surface: external_surf_ptr } => {
+                        log::info!("Using external Wayland surface for GPUI rendering");
+                        // Use external surface pointer
+                        RawWindow {
+                            window: external_surf_ptr,
+                            display: surface
+                                .backend()
+                                .upgrade()
+                                .unwrap()
+                                .display_ptr()
+                                .cast::<c_void>(),
+                        }
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => {
+                        // Fallback to default surface
+                        RawWindow {
+                            window: surface.id().as_ptr().cast::<c_void>(),
+                            display: surface
+                                .backend()
+                                .upgrade()
+                                .unwrap()
+                                .display_ptr()
+                                .cast::<c_void>(),
+                        }
+                    }
+                }
+            } else {
+                RawWindow {
+                    window: surface.id().as_ptr().cast::<c_void>(),
+                    display: surface
+                        .backend()
+                        .upgrade()
+                        .unwrap()
+                        .display_ptr()
+                        .cast::<c_void>(),
+                }
             };
             let config = BladeSurfaceConfig {
                 size: gpu::Extent {
