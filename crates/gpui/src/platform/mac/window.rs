@@ -568,6 +568,82 @@ unsafe impl Send for MacWindowState {}
 pub(crate) struct MacWindow(Arc<Mutex<MacWindowState>>);
 
 impl MacWindow {
+    pub fn open_external(
+        handle: AnyWindowHandle,
+        external_handle: crate::ExternalWindowHandle,
+        executor: ForegroundExecutor,
+        renderer_context: renderer::Context,
+    ) -> anyhow::Result<Self> {
+        use raw_window_handle::RawWindowHandle;
+
+        unsafe {
+            let native_window = match external_handle.raw_handle {
+                RawWindowHandle::AppKit(handle) => handle.ns_window.as_ptr() as id,
+                _ => return Err(anyhow::anyhow!("Invalid window handle type for macOS")),
+            };
+
+            let native_view = match external_handle.raw_handle {
+                RawWindowHandle::AppKit(handle) => handle.ns_view.as_ptr() as id,
+                _ => return Err(anyhow::anyhow!("Invalid window handle type for macOS")),
+            };
+
+            let bounds = external_handle.bounds;
+            let scale_factor = external_handle.scale_factor;
+
+            let mut window = Self(Arc::new(Mutex::new(MacWindowState {
+                handle,
+                executor,
+                native_window,
+                native_view: NonNull::new_unchecked(native_view),
+                blurred_view: None,
+                display_link: None,
+                renderer: renderer::new_renderer(
+                    renderer_context,
+                    native_window as *mut _,
+                    native_view as *mut _,
+                    bounds.size.map(|pixels| pixels.0),
+                    false,
+                ),
+                request_frame_callback: None,
+                event_callback: None,
+                activate_callback: None,
+                resize_callback: None,
+                moved_callback: None,
+                should_close_callback: None,
+                close_callback: None,
+                appearance_changed_callback: None,
+                input_handler: None,
+                last_key_equivalent: None,
+                synthetic_drag_counter: 0,
+                traffic_light_position: None,
+                transparent_titlebar: false,
+                previous_modifiers_changed_event: None,
+                keystroke_for_do_command: None,
+                do_command_handled: None,
+                external_files_dragged: false,
+                first_mouse: false,
+                fullscreen_restore_bounds: Bounds::default(),
+                move_tab_to_new_window_callback: None,
+                merge_all_windows_callback: None,
+                select_next_tab_callback: None,
+                select_previous_tab_callback: None,
+                toggle_tab_bar_callback: None,
+                activated_least_once: false,
+            })));
+
+            (*native_window).set_ivar(
+                WINDOW_STATE_IVAR,
+                Arc::into_raw(window.0.clone()) as *const c_void,
+            );
+            (*native_view).set_ivar(
+                WINDOW_STATE_IVAR,
+                Arc::into_raw(window.0.clone()) as *const c_void,
+            );
+
+            Ok(window)
+        }
+    }
+
     pub fn open(
         handle: AnyWindowHandle,
         WindowParams {

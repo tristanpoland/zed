@@ -417,6 +417,18 @@ impl Platform for WindowsPlatform {
         Ok(Box::new(window))
     }
 
+    fn open_window_external(
+        &self,
+        handle: AnyWindowHandle,
+        external_handle: ExternalWindowHandle,
+    ) -> Result<Box<dyn PlatformWindow>> {
+        let window = WindowsWindow::new_external(handle, external_handle, self.generate_creation_info())?;
+        let hwnd = window.get_raw_handle();
+        self.raw_window_handles.write().push(hwnd.into());
+
+        Ok(Box::new(window))
+    }
+
     fn window_appearance(&self) -> WindowAppearance {
         system_appearance().log_err().unwrap_or_default()
     }

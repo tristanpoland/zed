@@ -351,6 +351,73 @@ struct WindowCreateContext {
 }
 
 impl WindowsWindow {
+    pub(crate) fn new_external(
+        handle: AnyWindowHandle,
+        external_handle: ExternalWindowHandle,
+        creation_info: WindowCreationInfo,
+    ) -> Result<Self> {
+        use raw_window_handle::RawWindowHandle;
+
+        let hwnd = match external_handle.raw_handle {
+            RawWindowHandle::Win32(handle) => HWND(handle.hwnd.get() as isize as *mut _),
+            _ => return Err(anyhow::anyhow!("Invalid window handle type for Windows")),
+        };
+
+        let WindowCreationInfo {
+            executor,
+            current_cursor,
+            windows_version,
+            drop_target_helper,
+            validation_number,
+            main_receiver,
+            platform_window_handle,
+            disable_direct_composition,
+            directx_devices,
+            ..
+        } = creation_info;
+
+        let display = WindowsDisplay::primary_monitor().unwrap();
+        let appearance = system_appearance().unwrap_or_default();
+
+        let cs = CREATESTRUCTW {
+            x: external_handle.bounds.origin.x.0 as i32,
+            y: external_handle.bounds.origin.y.0 as i32,
+            cx: external_handle.bounds.size.width.0 as i32,
+            cy: external_handle.bounds.size.height.0 as i32,
+            ..Default::default()
+        };
+
+        let state = RefCell::new(WindowsWindowState::new(
+            hwnd,
+            &directx_devices,
+            &cs,
+            current_cursor,
+            display,
+            None,
+            appearance,
+            disable_direct_composition,
+        )?);
+
+        let inner = Rc::new_cyclic(|this| WindowsWindowInner {
+            hwnd,
+            this: this.clone(),
+            drop_target_helper: drop_target_helper.clone(),
+            state,
+            handle,
+            hide_title_bar: false,
+            is_movable: false,
+            executor: executor.clone(),
+            windows_version,
+            validation_number,
+            main_receiver: main_receiver.clone(),
+            platform_window_handle,
+        });
+
+        register_drag_drop(&inner)?;
+
+        Ok(Self(inner))
+    }
+
     pub(crate) fn new(
         handle: AnyWindowHandle,
         params: WindowParams,

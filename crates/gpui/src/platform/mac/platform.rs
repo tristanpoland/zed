@@ -636,6 +636,20 @@ impl Platform for MacPlatform {
         )))
     }
 
+    fn open_window_external(
+        &self,
+        handle: AnyWindowHandle,
+        external_handle: crate::ExternalWindowHandle,
+    ) -> Result<Box<dyn PlatformWindow>> {
+        let renderer_context = self.0.lock().renderer_context.clone();
+        Ok(Box::new(MacWindow::open_external(
+            handle,
+            external_handle,
+            self.foreground_executor(),
+            renderer_context,
+        )?))
+    }
+
     fn window_appearance(&self) -> WindowAppearance {
         unsafe {
             let app = NSApplication::sharedApplication(nil);

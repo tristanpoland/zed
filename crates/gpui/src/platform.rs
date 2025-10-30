@@ -49,7 +49,7 @@ use futures::channel::oneshot;
 use image::codecs::gif::GifDecoder;
 use image::{AnimationDecoder as _, Frame};
 use parking::Unparker;
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
 use schemars::JsonSchema;
 use seahash::SeaHasher;
 use serde::{Deserialize, Serialize};
@@ -82,6 +82,14 @@ pub use semantic_version::SemanticVersion;
 pub(crate) use test::*;
 #[cfg(target_os = "windows")]
 pub(crate) use windows::*;
+
+/// External window handle for bring-your-own-window mode
+#[derive(Debug, Clone)]
+pub struct ExternalWindowHandle {
+    pub raw_handle: RawWindowHandle,
+    pub bounds: Bounds<Pixels>,
+    pub scale_factor: f32,
+}
 
 #[cfg(any(test, feature = "test-support"))]
 pub use test::{TestDispatcher, TestScreenCaptureSource, TestScreenCaptureStream};
@@ -208,6 +216,14 @@ pub(crate) trait Platform: 'static {
         handle: AnyWindowHandle,
         options: WindowParams,
     ) -> anyhow::Result<Box<dyn PlatformWindow>>;
+
+    fn open_window_external(
+        &self,
+        handle: AnyWindowHandle,
+        external_handle: ExternalWindowHandle,
+    ) -> anyhow::Result<Box<dyn PlatformWindow>> {
+        Err(anyhow::anyhow!("External window mode not supported on this platform"))
+    }
 
     /// Returns the appearance of the application's windows.
     fn window_appearance(&self) -> WindowAppearance;

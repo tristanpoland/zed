@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed:*)",
+      "Read(//c/Users/redst/OneDrive/Documents/GitHub/Pulsar-Native/crates/engine/src/**)",
+      "Read(//c/Users/redst/OneDrive/Documents/GitHub/Pulsar-Native/crates/engine/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

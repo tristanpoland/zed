@@ -927,6 +927,208 @@ fn default_bounds(display_id: Option<DisplayId>, cx: &mut App) -> Bounds<Pixels>
 }
 
 impl Window {
+    pub(crate) fn new_external(
+        handle: AnyWindowHandle,
+        external_handle: crate::ExternalWindowHandle,
+        cx: &mut App,
+    ) -> Result<Self> {
+        let mut platform_window = cx.platform.open_window_external(handle, external_handle)?;
+
+        let tab_bar_visible = platform_window.tab_bar_visible();
+        SystemWindowTabController::init_visible(cx, tab_bar_visible);
+        if let Some(tabs) = platform_window.tabbed_windows() {
+            SystemWindowTabController::add_tab(cx, handle.window_id(), tabs);
+        }
+
+        let display_id = platform_window.display().map(|display| display.id());
+        let sprite_atlas = platform_window.sprite_atlas();
+        let mouse_position = platform_window.mouse_position();
+        let modifiers = platform_window.modifiers();
+        let capslock = platform_window.capslock();
+        let content_size = platform_window.content_size();
+        let scale_factor = platform_window.scale_factor();
+        let appearance = platform_window.appearance();
+        let text_system = Arc::new(WindowTextSystem::new(cx.text_system().clone()));
+        let invalidator = WindowInvalidator::new();
+        let active = Rc::new(Cell::new(platform_window.is_active()));
+        let hovered = Rc::new(Cell::new(platform_window.is_hovered()));
+        let needs_present = Rc::new(Cell::new(false));
+        let next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>> = Default::default();
+        let last_input_timestamp = Rc::new(Cell::new(Instant::now()));
+
+        platform_window.set_background_appearance(WindowBackgroundAppearance::Transparent);
+
+        platform_window.on_close(Box::new({
+            let window_id = handle.window_id();
+            let mut cx = cx.to_async();
+            move || {
+                let _ = handle.update(&mut cx, |_, window, _| window.remove_window());
+                let _ = cx.update(|cx| {
+                    SystemWindowTabController::remove_tab(cx, window_id);
+                });
+            }
+        }));
+        platform_window.on_request_frame(Box::new({
+            let mut cx = cx.to_async();
+            let invalidator = invalidator.clone();
+            let active = active.clone();
+            let needs_present = needs_present.clone();
+            let next_frame_callbacks = next_frame_callbacks.clone();
+            let last_input_timestamp = last_input_timestamp.clone();
+            move |request_frame_options| {
+                let next_frame_callbacks = next_frame_callbacks.take();
+                if !next_frame_callbacks.is_empty() {
+                    handle
+                        .update(&mut cx, |_, window, cx| {
+                            for callback in next_frame_callbacks {
+                                callback(window, cx);
+                            }
+                        })
+                        .log_err();
+                }
+
+                let needs_present = request_frame_options.require_presentation
+                    || needs_present.get()
+                    || (active.get()
+                        && last_input_timestamp.get().elapsed() < Duration::from_secs(1));
+
+                if invalidator.is_dirty() || request_frame_options.force_render {
+                    measure("frame duration", || {
+                        handle
+                            .update(&mut cx, |_, window, cx| {
+                                let arena_clear_needed = window.draw(cx);
+                                window.present();
+                                arena_clear_needed.clear();
+                            })
+                            .log_err();
+                    })
+                } else if needs_present {
+                    handle
+                        .update(&mut cx, |_, window, _| window.present())
+                        .log_err();
+                }
+
+                handle
+                    .update(&mut cx, |_, window, _| {
+                        window.complete_frame();
+                    })
+                    .log_err();
+            }
+        }));
+        platform_window.on_resize(Box::new({
+            let mut cx = cx.to_async();
+            move |_, _| {
+                handle
+                    .update(&mut cx, |_, window, cx| window.bounds_changed(cx))
+                    .log_err();
+            }
+        }));
+        platform_window.on_moved(Box::new({
+            let mut cx = cx.to_async();
+            move || {
+                handle
+                    .update(&mut cx, |_, window, cx| window.bounds_changed(cx))
+                    .log_err();
+            }
+        }));
+        platform_window.on_active_status_change(Box::new({
+            let mut cx = cx.to_async();
+            let active = active.clone();
+            move |is_active| {
+                active.set(is_active);
+                handle
+                    .update(&mut cx, |_, window, cx| window.active_changed(cx))
+                    .log_err();
+            }
+        }));
+        platform_window.on_hover_status_change(Box::new({
+            let mut cx = cx.to_async();
+            let hovered = hovered.clone();
+            move |is_hovered| {
+                hovered.set(is_hovered);
+                handle
+                    .update(&mut cx, |_, window, cx| window.hovered_changed(cx))
+                    .log_err();
+            }
+        }));
+        platform_window.on_input(Box::new({
+            let mut cx = cx.to_async();
+            let last_input_timestamp = last_input_timestamp.clone();
+            move |event| {
+                last_input_timestamp.set(Instant::now());
+                handle
+                    .update(&mut cx, |_, window, cx| window.dispatch_event(event, cx))
+                    .unwrap_or(DispatchEventResult::Propagate)
+            }
+        }));
+        platform_window.on_appearance_changed(Box::new({
+            let mut cx = cx.to_async();
+            move || {
+                handle
+                    .update(&mut cx, |_, window, cx| window.appearance_changed(cx))
+                    .log_err();
+            }
+        }));
+        platform_window.on_should_close(Box::new({
+            let mut cx = cx.to_async();
+            move || {
+                handle
+                    .update(&mut cx, |_, window, cx| {
+                        cx.emit(crate::WindowWillCloseEvent {})
+                            && !window.dirty.get()
+                    })
+                    .unwrap_or(true)
+            }
+        }));
+
+        let executor = cx.background_executor().clone();
+
+        Ok(Window {
+            handle,
+            removed: false,
+            platform_window,
+            display_id,
+            sprite_atlas,
+            mouse_position,
+            modifiers,
+            capslock,
+            scale_factor,
+            content_size,
+            layout_engine: None,
+            root: None,
+            element_id_stack: Default::default(),
+            next_focus_id: Default::default(),
+            focus: FocusId(0),
+            pending_focus: None,
+            prev_focus_path: Default::default(),
+            focus_handles: Arc::new(Mutex::new(SlotMap::with_key())),
+            focus_listener: None,
+            focus_events: Vec::new(),
+            focus_enabled: true,
+            new_focus_order: FxHashMap::default(),
+            focus_order: FxHashMap::default(),
+            dirty_focus_order: HashSet::default(),
+            default_prevented: false,
+            text_system,
+            rendered_frame: Frame::new(DispatchTree::default()),
+            next_frame: Frame::new(DispatchTree::default()),
+            dirty: Cell::new(true),
+            needs_present: needs_present.clone(),
+            draw_phase: Cell::new(DrawPhase::None),
+            titlebar_height: None,
+            appearance: appearance.unwrap_or_default(),
+            window_background_appearance: WindowBackgroundAppearance::Transparent,
+            invalidator,
+            active,
+            hovered,
+            next_frame_callbacks,
+            executor,
+            last_input_timestamp,
+            edit_debug_bounds: RefCell::new(true),
+            focus_timestamp: RefCell::new(Some(Instant::now())),
+        })
+    }
+
     pub(crate) fn new(
         handle: AnyWindowHandle,
         options: WindowOptions,
