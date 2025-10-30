@@ -3,7 +3,8 @@
     "allow": [
       "Bash(sed:*)",
       "Read(//c/Users/redst/OneDrive/Documents/GitHub/Pulsar-Native/crates/engine/src/**)",
-      "Read(//c/Users/redst/OneDrive/Documents/GitHub/Pulsar-Native/crates/engine/**)"
+      "Read(//c/Users/redst/OneDrive/Documents/GitHub/Pulsar-Native/crates/engine/**)",
+      "Bash(cargo check:*)"
     ],
     "deny": [],
     "ask": []

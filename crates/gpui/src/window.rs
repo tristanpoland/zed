@@ -1033,34 +1033,43 @@ impl Window {
         }));
         platform_window.on_active_status_change(Box::new({
             let mut cx = cx.to_async();
-            let active = active.clone();
-            move |is_active| {
-                active.set(is_active);
+            move |active_status| {
                 handle
-                    .update(&mut cx, |_, window, cx| window.active_changed(cx))
+                    .update(&mut cx, |_, window, cx| {
+                        window.active.set(active_status);
+                        window.modifiers = window.platform_window.modifiers();
+                        window.capslock = window.platform_window.capslock();
+                        window
+                            .activation_observers
+                            .clone()
+                            .retain(&(), |callback| callback(window, cx));
+                        window.bounds_changed(cx);
+                        window.refresh();
+                        SystemWindowTabController::update_last_active(cx, window.handle.id);
+                    })
                     .log_err();
             }
         }));
         platform_window.on_hover_status_change(Box::new({
             let mut cx = cx.to_async();
-            let hovered = hovered.clone();
-            move |is_hovered| {
-                hovered.set(is_hovered);
+            move |hover_status| {
                 handle
-                    .update(&mut cx, |_, window, cx| window.hovered_changed(cx))
+                    .update(&mut cx, |_, window, _| {
+                        window.hovered.set(hover_status);
+                        window.refresh();
+                    })
                     .log_err();
             }
         }));
-        platform_window.on_input(Box::new({
+        platform_window.on_input({
             let mut cx = cx.to_async();
-            let last_input_timestamp = last_input_timestamp.clone();
-            move |event| {
-                last_input_timestamp.set(Instant::now());
+            Box::new(move |event| {
                 handle
                     .update(&mut cx, |_, window, cx| window.dispatch_event(event, cx))
-                    .unwrap_or(DispatchEventResult::Propagate)
-            }
-        }));
+                    .log_err()
+                    .unwrap_or(DispatchEventResult::default())
+            })
+        });
         platform_window.on_appearance_changed(Box::new({
             let mut cx = cx.to_async();
             move || {
@@ -1073,59 +1082,69 @@ impl Window {
             let mut cx = cx.to_async();
             move || {
                 handle
-                    .update(&mut cx, |_, window, cx| {
-                        cx.emit(crate::WindowWillCloseEvent {})
-                            && !window.dirty.get()
+                    .update(&mut cx, |_, _window, _cx| {
+                        true
                     })
                     .unwrap_or(true)
             }
         }));
 
-        let executor = cx.background_executor().clone();
+        let _executor = cx.background_executor().clone();
 
         Ok(Window {
             handle,
+            invalidator,
             removed: false,
             platform_window,
             display_id,
             sprite_atlas,
+            text_system,
+            rem_size: px(16.),
+            rem_size_override_stack: SmallVec::new(),
+            viewport_size: content_size,
+            layout_engine: Some(TaffyLayoutEngine::new()),
+            root: None,
+            element_id_stack: SmallVec::default(),
+            text_style_stack: Vec::new(),
+            rendered_entity_stack: Vec::new(),
+            element_offset_stack: Vec::new(),
+            content_mask_stack: Vec::new(),
+            element_opacity: 1.0,
+            requested_autoscroll: None,
+            rendered_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
+            next_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
+            next_frame_callbacks,
+            next_hitbox_id: HitboxId(0),
+            next_tooltip_id: TooltipId::default(),
+            tooltip_bounds: None,
+            dirty_views: FxHashSet::default(),
+            focus_listeners: SubscriberSet::new(),
+            focus_lost_listeners: SubscriberSet::new(),
+            default_prevented: true,
             mouse_position,
+            mouse_hit_test: HitTest::default(),
             modifiers,
             capslock,
             scale_factor,
-            content_size,
-            layout_engine: None,
-            root: None,
-            element_id_stack: Default::default(),
-            next_focus_id: Default::default(),
-            focus: FocusId(0),
-            pending_focus: None,
-            prev_focus_path: Default::default(),
-            focus_handles: Arc::new(Mutex::new(SlotMap::with_key())),
-            focus_listener: None,
-            focus_events: Vec::new(),
-            focus_enabled: true,
-            new_focus_order: FxHashMap::default(),
-            focus_order: FxHashMap::default(),
-            dirty_focus_order: HashSet::default(),
-            default_prevented: false,
-            text_system,
-            rendered_frame: Frame::new(DispatchTree::default()),
-            next_frame: Frame::new(DispatchTree::default()),
-            dirty: Cell::new(true),
-            needs_present: needs_present.clone(),
-            draw_phase: Cell::new(DrawPhase::None),
-            titlebar_height: None,
-            appearance: appearance.unwrap_or_default(),
-            window_background_appearance: WindowBackgroundAppearance::Transparent,
-            invalidator,
+            bounds_observers: SubscriberSet::new(),
+            appearance,
+            appearance_observers: SubscriberSet::new(),
             active,
             hovered,
-            next_frame_callbacks,
-            executor,
+            needs_present,
             last_input_timestamp,
-            edit_debug_bounds: RefCell::new(true),
-            focus_timestamp: RefCell::new(Some(Instant::now())),
+            refreshing: false,
+            activation_observers: SubscriberSet::new(),
+            focus: None,
+            focus_enabled: true,
+            pending_input: None,
+            pending_modifier: ModifierState::default(),
+            pending_input_observers: SubscriberSet::new(),
+            prompt: None,
+            client_inset: None,
+            image_cache_stack: Vec::new(),
+            #[cfg(any(feature = "inspector", debug_assertions))]
+            inspector: None,
         })
     }
 

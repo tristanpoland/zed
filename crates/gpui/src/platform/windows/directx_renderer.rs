@@ -18,7 +18,6 @@ use windows::{
     },
     core::Interface,
 };
-use log::{trace, debug, info, warn, error};
 
 use crate::{
     platform::windows::directx_renderer::shader_resources::{

@@ -86,8 +86,11 @@ pub(crate) use windows::*;
 /// External window handle for bring-your-own-window mode
 #[derive(Debug, Clone)]
 pub struct ExternalWindowHandle {
+    /// The raw window handle from the external window system
     pub raw_handle: RawWindowHandle,
+    /// The bounds of the external window
     pub bounds: Bounds<Pixels>,
+    /// The scale factor of the external window
     pub scale_factor: f32,
 }
 
@@ -219,8 +222,8 @@ pub(crate) trait Platform: 'static {
 
     fn open_window_external(
         &self,
-        handle: AnyWindowHandle,
-        external_handle: ExternalWindowHandle,
+        _handle: AnyWindowHandle,
+        _external_handle: ExternalWindowHandle,
     ) -> anyhow::Result<Box<dyn PlatformWindow>> {
         Err(anyhow::anyhow!("External window mode not supported on this platform"))
     }
