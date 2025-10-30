@@ -86,7 +86,6 @@ impl WindowsWindowState {
         min_size: Option<Size<Pixels>>,
         appearance: WindowAppearance,
         disable_direct_composition: bool,
-        external_swap_chain: Option<*mut std::ffi::c_void>,
     ) -> Result<Self> {
         let scale_factor = {
             let monitor_dpi = unsafe { GetDpiForWindow(hwnd) } as f32;
@@ -106,7 +105,7 @@ impl WindowsWindowState {
         };
         let border_offset = WindowBorderOffset::default();
         let restore_from_minimized = None;
-        let renderer = DirectXRenderer::new(hwnd, directx_devices, disable_direct_composition, external_swap_chain)
+        let renderer = DirectXRenderer::new(hwnd, directx_devices, disable_direct_composition)
             .context("Creating DirectX renderer")?;
         let callbacks = Callbacks::default();
         let input_handler = None;
@@ -217,7 +216,6 @@ impl WindowsWindowInner {
             context.min_size,
             context.appearance,
             context.disable_direct_composition,
-            context.external_swap_chain,
         )?);
 
         Ok(Rc::new_cyclic(|this| Self {
@@ -350,7 +348,6 @@ struct WindowCreateContext {
     appearance: WindowAppearance,
     disable_direct_composition: bool,
     directx_devices: DirectXDevices,
-    external_swap_chain: Option<*mut std::ffi::c_void>,
 }
 
 impl WindowsWindow {
@@ -413,16 +410,6 @@ impl WindowsWindow {
             WindowsDisplay::primary_monitor().unwrap()
         };
         let appearance = system_appearance().unwrap_or_default();
-
-        // Extract external swap chain if provided
-        let external_swap_chain = params.external_surface.and_then(|surface| {
-            match surface.platform_surface {
-                crate::PlatformSurfaceHandle::DirectX { swap_chain } => Some(swap_chain),
-                #[allow(unreachable_patterns)]
-                _ => None,
-            }
-        });
-
         let mut context = WindowCreateContext {
             inner: None,
             handle,
@@ -440,7 +427,6 @@ impl WindowsWindow {
             appearance,
             disable_direct_composition,
             directx_devices,
-            external_swap_chain,
         };
         let creation_result = unsafe {
             CreateWindowExW(

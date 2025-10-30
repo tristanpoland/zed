@@ -582,19 +582,10 @@ impl MacWindow {
             display_id,
             window_min_size,
             tabbing_identifier,
-            external_surface,
         }: WindowParams,
         executor: ForegroundExecutor,
         renderer_context: renderer::Context,
     ) -> Self {
-        // Extract external Metal layer if provided
-        let external_layer = external_surface.and_then(|surface| {
-            match surface.platform_surface {
-                crate::PlatformSurfaceHandle::Metal { layer } => Some(layer),
-                #[allow(unreachable_patterns)]
-                _ => None,
-            }
-        });
         unsafe {
             let pool = NSAutoreleasePool::new(nil);
 
@@ -704,7 +695,6 @@ impl MacWindow {
                     native_view as *mut _,
                     bounds.size.map(|pixels| pixels.0),
                     false,
-                    external_layer,
                 ),
                 request_frame_callback: None,
                 event_callback: None,

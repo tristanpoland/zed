@@ -129,28 +129,23 @@ impl DirectXRenderer {
         hwnd: HWND,
         directx_devices: &DirectXDevices,
         disable_direct_composition: bool,
-        external_swap_chain: Option<*mut std::ffi::c_void>,
     ) -> Result<Self> {
         if disable_direct_composition {
             log::info!("Direct Composition is disabled.");
-        }
-        if external_swap_chain.is_some() {
-            log::info!("Using external swap chain for overlay rendering");
         }
 
         let devices = DirectXRendererDevices::new(directx_devices, disable_direct_composition)
             .context("Creating DirectX devices")?;
         let atlas = Arc::new(DirectXAtlas::new(&devices.device, &devices.device_context));
 
-        let resources = DirectXResources::new(&devices, 1, 1, hwnd, disable_direct_composition, external_swap_chain)
+        let resources = DirectXResources::new(&devices, 1, 1, hwnd, disable_direct_composition)
             .context("Creating DirectX resources")?;
         let globals = DirectXGlobalElements::new(&devices.device)
             .context("Creating DirectX global elements")?;
         let pipelines = DirectXRenderPipelines::new(&devices.device)
             .context("Creating DirectX render pipelines")?;
 
-        // Don't use DirectComposition if we have an external swap chain
-        let direct_composition = if disable_direct_composition || external_swap_chain.is_some() {
+        let direct_composition = if disable_direct_composition {
             None
         } else {
             let composition = DirectComposition::new(devices.dxgi_device.as_ref().unwrap(), hwnd)
@@ -823,14 +818,8 @@ impl DirectXResources {
         height: u32,
         hwnd: HWND,
         disable_direct_composition: bool,
-        external_swap_chain: Option<*mut std::ffi::c_void>,
     ) -> Result<ManuallyDrop<Self>> {
-        let swap_chain = if let Some(external_sc) = external_swap_chain {
-            // Use externally provided swap chain (must support premultiplied alpha for overlay rendering)
-            debug!("Using external DirectX swap chain for GPUI rendering");
-            let ptr = external_sc as *mut *mut std::ffi::c_void;
-            unsafe { IDXGISwapChain1::from_raw(ptr.read()) }
-        } else if disable_direct_composition {
+        let swap_chain = if disable_direct_composition {
             create_swap_chain(&devices.dxgi_factory, &devices.device, hwnd, width, height)?
         } else {
             create_swap_chain_for_composition(
