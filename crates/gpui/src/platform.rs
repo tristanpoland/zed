@@ -86,12 +86,14 @@ pub(crate) use windows::*;
 /// External window handle for bring-your-own-window mode
 #[derive(Debug, Clone)]
 pub struct ExternalWindowHandle {
-    /// The raw window handle from the external window system
+    /// The raw window handle from the external window system (used for getting HWND, but GPUI won't manage the window)
     pub raw_handle: RawWindowHandle,
-    /// The bounds of the external window
+    /// The bounds of the rendering surface
     pub bounds: Bounds<Pixels>,
     /// The scale factor of the external window
     pub scale_factor: f32,
+    /// Platform-specific surface handle (IDXGISwapChain on Windows, CAMetalLayer on macOS, etc)
+    pub surface_handle: Option<*mut std::ffi::c_void>,
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -545,6 +547,12 @@ pub(crate) trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
 
     #[cfg(target_os = "windows")]
     fn get_raw_handle(&self) -> windows::HWND;
+
+    /// Gets the shared D3D11 texture handle for zero-copy GPU composition (Windows only)
+    #[cfg(target_os = "windows")]
+    fn get_shared_texture_handle(&self) -> Option<*mut std::ffi::c_void> {
+        None
+    }
 
     // Linux specific methods
     fn inner_window_bounds(&self) -> WindowBounds {

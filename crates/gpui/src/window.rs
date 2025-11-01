@@ -1554,6 +1554,19 @@ impl Window {
         subscription
     }
 
+    /// Gets the shared D3D11 texture handle for zero-copy GPU composition in external window mode (Windows only).
+    /// Returns None if not in external window mode or if not on Windows.
+    #[cfg(target_os = "windows")]
+    pub fn get_shared_texture_handle(&self) -> Option<*mut std::ffi::c_void> {
+        self.platform_window.get_shared_texture_handle()
+    }
+
+    /// Gets the shared D3D11 texture handle - stub for non-Windows platforms
+    #[cfg(not(target_os = "windows"))]
+    pub fn get_shared_texture_handle(&self) -> Option<*mut std::ffi::c_void> {
+        None
+    }
+
     /// Replaces the root entity of the window with a new one.
     pub fn replace_root<E>(
         &mut self,
@@ -2225,7 +2238,7 @@ impl Window {
     }
 
     #[profiling::function]
-    fn present(&self) {
+    pub(crate) fn present(&self) {
         self.platform_window.draw(&self.rendered_frame.scene);
         self.needs_present.set(false);
         profiling::finish_frame!();

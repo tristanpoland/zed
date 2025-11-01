@@ -227,6 +227,23 @@ impl Application {
     pub fn path_for_auxiliary_executable(&self, name: &str) -> Result<PathBuf> {
         self.0.borrow().path_for_auxiliary_executable(name)
     }
+
+    /// Opens a window on an external surface (e.g., a winit window) with the root view
+    /// returned by the given function.
+    pub fn open_window_external<V: 'static + Render>(
+        &mut self,
+        external_handle: crate::ExternalWindowHandle,
+        build_root_view: impl FnOnce(&mut Window, &mut App) -> Entity<V>,
+    ) -> anyhow::Result<WindowHandle<V>> {
+        self.0.borrow_mut().open_window_external(external_handle, build_root_view)
+    }
+
+    /// Execute a callback with mutable access to the App context.
+    /// This is useful for external event loops (e.g., winit) that need to manually
+    /// drive GPUI operations like window updates.
+    pub fn update<R>(&mut self, f: impl FnOnce(&mut App) -> R) -> R {
+        f(&mut self.0.borrow_mut())
+    }
 }
 
 type Handler = Box<dyn FnMut(&mut App) -> bool + 'static>;
@@ -757,6 +774,36 @@ impl App {
     /// multiple times in an update cycle and still result in a single redraw.
     pub fn refresh_windows(&mut self) {
         self.pending_effects.push_back(Effect::RefreshWindows);
+    }
+
+    /// Forces all windows to draw immediately. This is intended for external event loops
+    /// (e.g., winit) that need to manually drive GPUI rendering.
+    pub fn draw_windows(&mut self) {
+        // Collect window handles first to avoid borrow checker issues
+        let windows_to_draw = self
+            .windows
+            .values()
+            .filter_map(|window| {
+                let window = window.as_ref()?;
+                Some(window.handle)
+            })
+            .collect::<Vec<_>>();
+
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static CALL_COUNT: AtomicU32 = AtomicU32::new(0);
+        let count = CALL_COUNT.fetch_add(1, Ordering::Relaxed);
+        if count % 60 == 0 {
+            eprintln!("🎯 App::draw_windows() called (frame {}), {} windows", count + 1, windows_to_draw.len());
+        }
+
+        // Now draw and present each window using update_window
+        for window_handle in windows_to_draw {
+            let _ = self.update_window(window_handle, |_, window, cx| {
+                let clear = window.draw(cx);
+                window.present();  // Present the rendered frame to the screen
+                clear.clear();
+            });
+        }
     }
 
     pub(crate) fn update<R>(&mut self, update: impl FnOnce(&mut Self) -> R) -> R {

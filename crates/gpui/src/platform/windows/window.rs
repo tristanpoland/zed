@@ -86,6 +86,7 @@ impl WindowsWindowState {
         min_size: Option<Size<Pixels>>,
         appearance: WindowAppearance,
         disable_direct_composition: bool,
+        enable_transparency: bool,
     ) -> Result<Self> {
         let scale_factor = {
             let monitor_dpi = unsafe { GetDpiForWindow(hwnd) } as f32;
@@ -105,7 +106,7 @@ impl WindowsWindowState {
         };
         let border_offset = WindowBorderOffset::default();
         let restore_from_minimized = None;
-        let renderer = DirectXRenderer::new(hwnd, directx_devices, disable_direct_composition)
+        let renderer = DirectXRenderer::new(hwnd, directx_devices, disable_direct_composition, enable_transparency)
             .context("Creating DirectX renderer")?;
         let callbacks = Callbacks::default();
         let input_handler = None;
@@ -216,6 +217,7 @@ impl WindowsWindowInner {
             context.min_size,
             context.appearance,
             context.disable_direct_composition,
+            false, // Regular windows don't need transparency
         )?);
 
         Ok(Rc::new_cyclic(|this| Self {
@@ -358,6 +360,7 @@ impl WindowsWindow {
     ) -> Result<Self> {
         use raw_window_handle::RawWindowHandle;
 
+        // Extract HWND from external handle - we will render to THIS window, not create a new one
         let hwnd = match external_handle.raw_handle {
             RawWindowHandle::Win32(handle) => HWND(handle.hwnd.get() as isize as *mut _),
             _ => return Err(anyhow::anyhow!("Invalid window handle type for Windows")),
@@ -379,6 +382,7 @@ impl WindowsWindow {
         let display = WindowsDisplay::primary_monitor().unwrap();
         let appearance = system_appearance().unwrap_or_default();
 
+        // Create CREATESTRUCTW with external window bounds
         let cs = CREATESTRUCTW {
             x: external_handle.bounds.origin.x.0 as i32,
             y: external_handle.bounds.origin.y.0 as i32,
@@ -387,7 +391,9 @@ impl WindowsWindow {
             ..Default::default()
         };
 
-        let state = RefCell::new(WindowsWindowState::new(
+        // Create renderer state - use DirectComposition for external windows
+        // This allows proper layering over the parent window's content
+        let mut window_state = WindowsWindowState::new(
             hwnd,
             &directx_devices,
             &cs,
@@ -395,9 +401,22 @@ impl WindowsWindow {
             display,
             None,
             appearance,
-            disable_direct_composition,
-        )?);
+            false, // Enable DirectComposition for external windows to allow layering!
+            true, // Enable transparency for external windows so they can be layered
+        )?;
 
+        // IMPORTANT: Resize the renderer to match the external window's actual size
+        // The renderer is created with 1x1 initially, so we need to resize it
+        let physical_size = size(
+            DevicePixels(external_handle.bounds.size.width.0 as i32),
+            DevicePixels(external_handle.bounds.size.height.0 as i32),
+        );
+        window_state.renderer.resize(physical_size)?;
+        eprintln!("✅ Resized GPUI renderer to match external window: {:?}", physical_size);
+
+        let state = RefCell::new(window_state);
+
+        // Create the window inner structure
         let inner = Rc::new_cyclic(|this| WindowsWindowInner {
             hwnd,
             this: this.clone(),
@@ -413,7 +432,11 @@ impl WindowsWindow {
             platform_window_handle,
         });
 
-        register_drag_drop(&inner)?;
+        // Don't register drag and drop for external windows - the parent window handles that
+        // register_drag_drop(&inner)?;
+
+        // Note: We do NOT call ShowWindow or SetWindowPos because we don't own this window
+        // The external window manager (winit) handles window visibility and positioning
 
         Ok(Self(inner))
     }
@@ -910,12 +933,35 @@ impl PlatformWindow for WindowsWindow {
         self.0.hwnd
     }
 
+    fn get_shared_texture_handle(&self) -> Option<*mut std::ffi::c_void> {
+        self.0
+            .state
+            .borrow()
+            .renderer
+            .get_shared_texture_handle()
+            .ok()
+            .flatten()
+    }
+
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.0.state.borrow().renderer.gpu_specs().log_err()
     }
 
     fn update_ime_position(&self, _bounds: Bounds<Pixels>) {
         // There is no such thing on Windows.
+    }
+}
+
+impl WindowsWindow {
+    /// Get the shared D3D11 texture handle for zero-copy GPU composition in external window mode
+    pub fn get_shared_texture_handle(&self) -> Option<*mut std::ffi::c_void> {
+        self.0
+            .state
+            .borrow()
+            .renderer
+            .get_shared_texture_handle()
+            .ok()
+            .flatten()
     }
 }
 

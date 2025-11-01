@@ -59,7 +59,7 @@ pub(crate) struct DirectXRendererDevices {
 
 struct DirectXResources {
     // Direct3D rendering objects
-    swap_chain: IDXGISwapChain1,
+    swap_chain: Option<IDXGISwapChain1>, // None for external window mode (offscreen rendering)
     render_target: ManuallyDrop<ID3D11Texture2D>,
     render_target_view: [Option<ID3D11RenderTargetView>; 1],
 
@@ -128,29 +128,37 @@ impl DirectXRenderer {
         hwnd: HWND,
         directx_devices: &DirectXDevices,
         disable_direct_composition: bool,
+        enable_transparency: bool,
     ) -> Result<Self> {
+        log::info!("🏗️  DirectXRenderer::new() called: disable_dc={}, enable_transp={}", disable_direct_composition, enable_transparency);
         if disable_direct_composition {
             log::info!("Direct Composition is disabled.");
+        }
+        if enable_transparency {
+            log::info!("Transparency is enabled for external window.");
         }
 
         let devices = DirectXRendererDevices::new(directx_devices, disable_direct_composition)
             .context("Creating DirectX devices")?;
         let atlas = Arc::new(DirectXAtlas::new(&devices.device, &devices.device_context));
 
-        let resources = DirectXResources::new(&devices, 1, 1, hwnd, disable_direct_composition)
+        let resources = DirectXResources::new(&devices, 1, 1, hwnd, disable_direct_composition, enable_transparency)
             .context("Creating DirectX resources")?;
         let globals = DirectXGlobalElements::new(&devices.device)
             .context("Creating DirectX global elements")?;
         let pipelines = DirectXRenderPipelines::new(&devices.device)
             .context("Creating DirectX render pipelines")?;
 
-        let direct_composition = if disable_direct_composition {
-            None
+        let direct_composition = if disable_direct_composition || resources.swap_chain.is_none() {
+            if resources.swap_chain.is_none() {
+                log::info!("⚠️  Skipping DirectComposition - rendering to offscreen shared texture");
+            }
+            None // No DirectComposition for external windows (offscreen rendering)
         } else {
             let composition = DirectComposition::new(devices.dxgi_device.as_ref().unwrap(), hwnd)
                 .context("Creating DirectComposition")?;
             composition
-                .set_swap_chain(&resources.swap_chain)
+                .set_swap_chain(resources.swap_chain.as_ref().unwrap())
                 .context("Setting swap chain for DirectComposition")?;
             Some(composition)
         };
@@ -169,6 +177,24 @@ impl DirectXRenderer {
 
     pub(crate) fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
         self.atlas.clone()
+    }
+
+    /// Get the shared texture handle for external window composition (zero-copy GPU blitting)
+    pub(crate) fn get_shared_texture_handle(&self) -> Result<Option<*mut std::ffi::c_void>> {
+        // Only available when using offscreen rendering (no swap chain)
+        if self.resources.swap_chain.is_some() {
+            log::warn!("❌ Cannot get shared handle - using swap chain, not offscreen texture");
+            return Ok(None);
+        }
+
+        use windows::Win32::Graphics::Dxgi::*;
+        use windows::core::Interface;
+
+        let texture = &*self.resources.render_target;
+        let resource: IDXGIResource = texture.cast()?;
+        let handle = unsafe { resource.GetSharedHandle()? };
+        log::info!("✅ Got shared texture handle: {:?}", handle.0);
+        Ok(Some(handle.0 as *mut std::ffi::c_void))
     }
 
     fn pre_draw(&self) -> Result<()> {
@@ -202,8 +228,17 @@ impl DirectXRenderer {
 
     #[inline]
     fn present(&mut self) -> Result<()> {
-        let result = unsafe { self.resources.swap_chain.Present(0, DXGI_PRESENT(0)) };
-        result.ok().context("Presenting swap chain failed")
+        if let Some(swap_chain) = &self.resources.swap_chain {
+            let result = unsafe { swap_chain.Present(0, DXGI_PRESENT(0)) };
+            result.ok().context("Presenting swap chain failed")
+        } else {
+            // External window mode - no present needed, rendering directly to shared texture
+            // Flush the device context to ensure all GPU commands complete before external compositor reads the texture
+            unsafe {
+                self.devices.device_context.Flush();
+            }
+            Ok(())
+        }
     }
 
     pub(crate) fn handle_device_lost(&mut self, directx_devices: &DirectXDevices) {
@@ -254,16 +289,17 @@ impl DirectXRenderer {
             self.resources.height,
             self.hwnd,
             disable_direct_composition,
+            false,
         )?;
         let globals = DirectXGlobalElements::new(&devices.device)?;
         let pipelines = DirectXRenderPipelines::new(&devices.device)?;
 
-        let direct_composition = if disable_direct_composition {
+        let direct_composition = if disable_direct_composition || resources.swap_chain.is_none() {
             None
         } else {
             let composition =
                 DirectComposition::new(devices.dxgi_device.as_ref().unwrap(), self.hwnd)?;
-            composition.set_swap_chain(&resources.swap_chain)?;
+            composition.set_swap_chain(resources.swap_chain.as_ref().unwrap())?;
             Some(composition)
         };
 
@@ -284,6 +320,12 @@ impl DirectXRenderer {
     }
 
     pub(crate) fn draw(&mut self, scene: &Scene) -> Result<()> {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static DRAW_COUNT: AtomicU32 = AtomicU32::new(0);
+        let count = DRAW_COUNT.fetch_add(1, Ordering::Relaxed);
+        if count % 60 == 0 {
+            eprintln!("🖌️  DirectXRenderer::draw() called (frame {})", count + 1);
+        }
         self.pre_draw()?;
         for batch in scene.batches() {
             match batch {
@@ -333,17 +375,18 @@ impl DirectXRenderer {
         // The app might have moved to a monitor that's attached to a different graphics device.
         // When a graphics device is removed or reset, the desktop resolution often changes, resulting in a window size change.
         // But here we just return the error, because we are handling device lost scenarios elsewhere.
-        unsafe {
-            self.resources
-                .swap_chain
-                .ResizeBuffers(
-                    BUFFER_COUNT as u32,
-                    width,
-                    height,
-                    RENDER_TARGET_FORMAT,
-                    DXGI_SWAP_CHAIN_FLAG(0),
-                )
-                .context("Failed to resize swap chain")?;
+        if let Some(swap_chain) = &self.resources.swap_chain {
+            unsafe {
+                swap_chain
+                    .ResizeBuffers(
+                        BUFFER_COUNT as u32,
+                        width,
+                        height,
+                        RENDER_TARGET_FORMAT,
+                        DXGI_SWAP_CHAIN_FLAG(0),
+                    )
+                    .context("Failed to resize swap chain")?;
+            }
         }
 
         self.resources
@@ -817,27 +860,41 @@ impl DirectXResources {
         height: u32,
         hwnd: HWND,
         disable_direct_composition: bool,
+        enable_transparency: bool,
     ) -> Result<ManuallyDrop<Self>> {
-        let swap_chain = if disable_direct_composition {
-            create_swap_chain(&devices.dxgi_factory, &devices.device, hwnd, width, height)?
+        // For external windows with transparency, use offscreen shared texture instead of swap chain
+        let use_offscreen = enable_transparency;
+
+        eprintln!("🔍 DirectXResources::new - enable_transparency={}, use_offscreen={}", enable_transparency, use_offscreen);
+
+        let (swap_chain, render_target, render_target_view) = if use_offscreen {
+            // External window mode: create shared offscreen texture
+            eprintln!("🔧 Creating SHARED OFFSCREEN texture for external window ({}x{})", width, height);
+            let (rt, rtv) = create_shared_render_target(&devices.device, width, height)?;
+            eprintln!("✅ Shared offscreen texture created successfully!");
+            (None, rt, rtv)
         } else {
-            create_swap_chain_for_composition(
-                &devices.dxgi_factory,
-                &devices.device,
-                width,
-                height,
-            )?
+            // Normal window mode: use swap chain
+            let sc = if disable_direct_composition {
+                create_swap_chain(&devices.dxgi_factory, &devices.device, hwnd, width, height, false)?
+            } else {
+                create_swap_chain_for_composition(
+                    &devices.dxgi_factory,
+                    &devices.device,
+                    width,
+                    height,
+                )?
+            };
+            let (rt, rtv) = create_render_target_and_its_view(&sc, &devices.device)?;
+            (Some(sc), rt, rtv)
         };
 
-        let (
-            render_target,
-            render_target_view,
-            path_intermediate_texture,
-            path_intermediate_srv,
-            path_intermediate_msaa_texture,
-            path_intermediate_msaa_view,
-            viewport,
-        ) = create_resources(devices, &swap_chain, width, height)?;
+        let (path_intermediate_texture, path_intermediate_srv) =
+            create_path_intermediate_texture(&devices.device, width, height)?;
+        let (path_intermediate_msaa_texture, path_intermediate_msaa_view) =
+            create_path_intermediate_msaa_texture_and_view(&devices.device, width, height)?;
+        let viewport = set_viewport(&devices.device_context, width as f32, height as f32);
+
         set_rasterizer_state(&devices.device, &devices.device_context)?;
 
         Ok(ManuallyDrop::new(Self {
@@ -861,15 +918,17 @@ impl DirectXResources {
         width: u32,
         height: u32,
     ) -> Result<()> {
-        let (
-            render_target,
-            render_target_view,
-            path_intermediate_texture,
-            path_intermediate_srv,
-            path_intermediate_msaa_texture,
-            path_intermediate_msaa_view,
-            viewport,
-        ) = create_resources(devices, &self.swap_chain, width, height)?;
+        let (render_target, render_target_view) = if let Some(swap_chain) = &self.swap_chain {
+            create_render_target_and_its_view(swap_chain, &devices.device)?
+        } else {
+            create_shared_render_target(&devices.device, width, height)?
+        };
+
+        let (path_intermediate_texture, path_intermediate_srv) =
+            create_path_intermediate_texture(&devices.device, width, height)?;
+        let (path_intermediate_msaa_texture, path_intermediate_msaa_view) =
+            create_path_intermediate_msaa_texture_and_view(&devices.device, width, height)?;
+        let viewport = set_viewport(&devices.device_context, width as f32, height as f32);
         self.render_target = render_target;
         self.render_target_view = render_target_view;
         self.path_intermediate_texture = path_intermediate_texture;
@@ -1208,6 +1267,7 @@ fn create_swap_chain(
     hwnd: HWND,
     width: u32,
     height: u32,
+    enable_transparency: bool,
 ) -> Result<IDXGISwapChain1> {
     use windows::Win32::Graphics::Dxgi::DXGI_MWA_NO_ALT_ENTER;
 
@@ -1224,7 +1284,12 @@ fn create_swap_chain(
         BufferCount: BUFFER_COUNT as u32,
         Scaling: DXGI_SCALING_NONE,
         SwapEffect: DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
-        AlphaMode: DXGI_ALPHA_MODE_IGNORE,
+        // Use premultiplied alpha for transparency support (e.g., child windows)
+        AlphaMode: if enable_transparency {
+            DXGI_ALPHA_MODE_PREMULTIPLIED
+        } else {
+            DXGI_ALPHA_MODE_IGNORE
+        },
         Flags: 0,
     };
     let swap_chain =
@@ -1279,6 +1344,48 @@ fn create_render_target_and_its_view(
     unsafe { device.CreateRenderTargetView(&render_target, None, Some(&mut render_target_view))? };
     Ok((
         ManuallyDrop::new(render_target),
+        [Some(render_target_view.unwrap())],
+    ))
+}
+
+#[inline]
+fn create_shared_render_target(
+    device: &ID3D11Device,
+    width: u32,
+    height: u32,
+) -> Result<(
+    ManuallyDrop<ID3D11Texture2D>,
+    [Option<ID3D11RenderTargetView>; 1],
+)> {
+    use windows::Win32::Graphics::Direct3D11::*;
+    use windows::Win32::Graphics::Dxgi::Common::*;
+
+    // Create a shared texture for external window rendering (zero-copy GPU composition)
+    let desc = D3D11_TEXTURE2D_DESC {
+        Width: width,
+        Height: height,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: RENDER_TARGET_FORMAT,
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: (D3D11_BIND_RENDER_TARGET.0 | D3D11_BIND_SHADER_RESOURCE.0) as u32,
+        CPUAccessFlags: 0,
+        MiscFlags: D3D11_RESOURCE_MISC_SHARED.0 as u32, // SHARED for zero-copy access from winit!
+    };
+
+    let mut texture = None;
+    unsafe { device.CreateTexture2D(&desc, None, Some(&mut texture))? };
+    let texture = texture.unwrap();
+
+    let mut render_target_view = None;
+    unsafe { device.CreateRenderTargetView(&texture, None, Some(&mut render_target_view))? };
+
+    Ok((
+        ManuallyDrop::new(texture),
         [Some(render_target_view.unwrap())],
     ))
 }

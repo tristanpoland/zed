@@ -4,7 +4,21 @@
       "Bash(sed:*)",
       "Read(//c/Users/redst/OneDrive/Documents/GitHub/Pulsar-Native/crates/engine/src/**)",
       "Read(//c/Users/redst/OneDrive/Documents/GitHub/Pulsar-Native/crates/engine/**)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo build:*)",
+      "Read(//c/Users/redst/OneDrive/Documents/GitHub/Pulsar-Native/**)",
+      "Bash(RUST_LOG=info cargo run:*)",
+      "Bash(Select-String -Pattern \"error|Compiling engine|Finished\")",
+      "Bash(./pulsar_engine.exe:*)",
+      "Bash(timeout 10 cargo run:*)",
+      "Bash(timeout:*)",
+      "Bash(cat:*)",
+      "Bash(cargo add:*)",
+      "Bash(Select-String -Pattern \"Compiling engine|Finished|error\")",
+      "WebSearch",
+      "Bash(Select-String -Pattern \"(✅|❌|💡|🎯|🖌️|thread ''''main'''' panicked|error:|Compiling engine|Finished)\")",
+      "Bash(Select-Object -First 50)"
     ],
     "deny": [],
     "ask": []
