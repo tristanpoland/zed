@@ -1928,6 +1928,25 @@ impl Window {
         self.platform_window.resize(size);
     }
 
+    /// Resize the GPUI renderer's internal buffers (for external windows)
+    /// This should be called when an external window is resized to ensure GPUI's
+    /// rendering buffers match the new window size.
+    /// physical_size should be in device pixels (logical pixels × scale factor)
+    #[cfg(target_os = "windows")]
+    pub fn resize_renderer(&mut self, physical_size: Size<DevicePixels>) -> anyhow::Result<()> {
+        self.platform_window.resize_renderer(physical_size)
+    }
+
+    /// Update the logical size of the window (for external windows)
+    /// This updates GPUI's understanding of the window dimensions for layout.
+    /// logical_size should be in logical pixels (physical pixels / scale factor)
+    #[cfg(target_os = "windows")]
+    pub fn update_logical_size(&mut self, logical_size: Size<Pixels>) {
+        self.platform_window.update_logical_size(logical_size);
+        // Also update viewport_size to match, like bounds_changed() does
+        self.viewport_size = logical_size;
+    }
+
     /// Returns whether or not the window is currently fullscreen
     pub fn is_fullscreen(&self) -> bool {
         self.platform_window.is_fullscreen()

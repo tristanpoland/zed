@@ -943,6 +943,14 @@ impl PlatformWindow for WindowsWindow {
             .flatten()
     }
 
+    fn resize_renderer(&self, physical_size: crate::Size<DevicePixels>) -> anyhow::Result<()> {
+        self.0.state.borrow_mut().renderer.resize(physical_size)
+    }
+
+    fn update_logical_size(&self, logical_size: crate::Size<Pixels>) {
+        self.0.state.borrow_mut().logical_size = logical_size;
+    }
+
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.0.state.borrow().renderer.gpu_specs().log_err()
     }
@@ -962,6 +970,20 @@ impl WindowsWindow {
             .get_shared_texture_handle()
             .ok()
             .flatten()
+    }
+
+    /// Resize the GPUI renderer's internal buffers for external window mode
+    /// This should be called when the external window is resized
+    /// physical_size should be in device pixels (logical pixels × scale factor)
+    pub fn resize_renderer(&self, physical_size: crate::Size<DevicePixels>) -> anyhow::Result<()> {
+        self.0.state.borrow_mut().renderer.resize(physical_size)
+    }
+
+    /// Update the logical size of the window for external window mode
+    /// This updates GPUI's understanding of the window dimensions for layout
+    /// logical_size should be in logical pixels (physical pixels / scale factor)
+    pub fn update_logical_size(&self, logical_size: crate::Size<Pixels>) {
+        self.0.state.borrow_mut().logical_size = logical_size;
     }
 }
 

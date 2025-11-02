@@ -554,6 +554,24 @@ pub(crate) trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
         None
     }
 
+    /// Resize the GPUI renderer's internal buffers (for external windows)
+    /// This should be called when an external window is resized to ensure GPUI's
+    /// rendering buffers match the new window size.
+    /// physical_size should be in device pixels (logical pixels × scale factor)
+    #[cfg(target_os = "windows")]
+    fn resize_renderer(&self, physical_size: Size<DevicePixels>) -> Result<()> {
+        let _ = physical_size;
+        Ok(())
+    }
+
+    /// Update the logical size of the window (for external windows)
+    /// This updates GPUI's understanding of the window dimensions for layout.
+    /// logical_size should be in logical pixels (physical pixels / scale factor)
+    #[cfg(target_os = "windows")]
+    fn update_logical_size(&self, logical_size: Size<Pixels>) {
+        let _ = logical_size;
+    }
+
     // Linux specific methods
     fn inner_window_bounds(&self) -> WindowBounds {
         self.window_bounds()
