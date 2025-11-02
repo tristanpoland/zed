@@ -1490,9 +1490,13 @@ impl Window {
     }
 }
 
+/// Result of dispatching an event, indicating whether the event should propagate
+/// and whether the default behavior was prevented.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct DispatchEventResult {
+pub struct DispatchEventResult {
+    /// Whether the event should continue propagating through the event chain.
     pub propagate: bool,
+    /// Whether handlers called `prevent_default()` to disable default behavior.
     pub default_prevented: bool,
 }
 
@@ -3886,6 +3890,7 @@ impl Window {
     /// Dispatch a mouse or keyboard event on the window.
     #[profiling::function]
     pub fn dispatch_event(&mut self, event: PlatformInput, cx: &mut App) -> DispatchEventResult {
+        eprintln!("🎯 dispatch_event called with: {:?}", event);
         self.last_input_timestamp.set(Instant::now());
         // Handlers may set this to false by calling `stop_propagation`.
         cx.propagate_event = true;
@@ -5062,6 +5067,22 @@ impl<V: 'static + Render> WindowHandle<V> {
     pub fn is_active(&self, cx: &mut App) -> Option<bool> {
         cx.update_window(self.any_handle, |_, window, _| window.is_window_active())
             .ok()
+    }
+    
+    /// Inject an input event into this window from an external source.
+    /// This is useful when the window is managed by an external framework (like winit).
+    /// Returns the result of dispatching the event.
+    pub fn inject_input_event<C>(
+        &self,
+        cx: &mut C,
+        event: PlatformInput,
+    ) -> Result<DispatchEventResult>
+    where
+        C: AppContext,
+    {
+        cx.update_window(self.any_handle, |_root_view, window, cx| {
+            window.dispatch_event(event, cx)
+        })
     }
 }
 

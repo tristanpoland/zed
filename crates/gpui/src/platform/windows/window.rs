@@ -353,6 +353,23 @@ struct WindowCreateContext {
 }
 
 impl WindowsWindow {
+    /// Inject an input event into this window from an external source
+    /// This is used when the window is managed by an external framework (like winit)
+    /// that handles the Win32 message loop
+    pub fn inject_input_event(&self, event: PlatformInput) -> DispatchEventResult {
+        let mut state = self.0.state.borrow_mut();
+        if let Some(mut callback) = state.callbacks.input.take() {
+            eprintln!("🔔 WindowsWindow::inject_input_event - calling callback for {:?}", event);
+            drop(state);
+            let result = callback(event);
+            self.0.state.borrow_mut().callbacks.input = Some(callback);
+            result
+        } else {
+            eprintln!("❌ WindowsWindow::inject_input_event - NO CALLBACK SET!");
+            DispatchEventResult::default()
+        }
+    }
+    
     pub(crate) fn new_external(
         handle: AnyWindowHandle,
         external_handle: ExternalWindowHandle,
