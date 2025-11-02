@@ -359,13 +359,11 @@ impl WindowsWindow {
     pub fn inject_input_event(&self, event: PlatformInput) -> DispatchEventResult {
         let mut state = self.0.state.borrow_mut();
         if let Some(mut callback) = state.callbacks.input.take() {
-            eprintln!("🔔 WindowsWindow::inject_input_event - calling callback for {:?}", event);
             drop(state);
             let result = callback(event);
             self.0.state.borrow_mut().callbacks.input = Some(callback);
             result
         } else {
-            eprintln!("❌ WindowsWindow::inject_input_event - NO CALLBACK SET!");
             DispatchEventResult::default()
         }
     }
