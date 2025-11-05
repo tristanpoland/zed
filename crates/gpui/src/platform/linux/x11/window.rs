@@ -706,6 +706,143 @@ impl X11WindowState {
         setup_result
     }
 
+    pub fn new_external(
+        handle: AnyWindowHandle,
+        external_handle: crate::ExternalWindowHandle,
+        client: X11ClientStatePtr,
+        executor: ForegroundExecutor,
+        gpu_context: &BladeContext,
+        xcb: &Rc<XCBConnection>,
+        client_side_decorations_supported: bool,
+        x_main_screen_index: usize,
+        atoms: &XcbAtoms,
+        appearance: WindowAppearance,
+    ) -> anyhow::Result<Self> {
+        use raw_window_handle::RawWindowHandle;
+
+        // Extract X11 window ID from external handle - we will render to THIS window, not create a new one
+        let x_window = match external_handle.raw_handle {
+            RawWindowHandle::Xcb(handle) => handle.window.get() as xproto::Window,
+            RawWindowHandle::Xlib(handle) => handle.window as xproto::Window,
+            _ => return Err(anyhow::anyhow!("Invalid window handle type for X11")),
+        };
+
+        let scale_factor = external_handle.scale_factor;
+        let x_screen_index = x_main_screen_index; // External windows use the main screen
+
+        let visual_set = find_visuals(xcb, x_screen_index);
+        let visual = match visual_set.transparent {
+            Some(visual) => visual,
+            None => {
+                log::warn!("Unable to find a transparent visual for external window");
+                visual_set.inherit
+            }
+        };
+        log::info!("External window using visual: {:?}", visual);
+
+        // Set up event masks on the external window so we can receive events
+        let event_mask = xproto::EventMask::EXPOSURE
+            | xproto::EventMask::STRUCTURE_NOTIFY
+            | xproto::EventMask::FOCUS_CHANGE
+            | xproto::EventMask::KEY_PRESS
+            | xproto::EventMask::KEY_RELEASE
+            | xproto::EventMask::PROPERTY_CHANGE
+            | xproto::EventMask::VISIBILITY_CHANGE;
+
+        check_reply(
+            || "X11 ChangeWindowAttributes for external window failed.",
+            xcb.change_window_attributes(
+                x_window,
+                &xproto::ChangeWindowAttributesAux::new().event_mask(event_mask),
+            ),
+        )?;
+
+        // Set up XInput events for mouse/touch input
+        check_reply(
+            || "X11 XiSelectEvents for external window failed.",
+            xcb.xinput_xi_select_events(
+                x_window,
+                &[xinput::EventMask {
+                    deviceid: XINPUT_ALL_DEVICE_GROUPS,
+                    mask: vec![
+                        xinput::XIEventMask::MOTION
+                            | xinput::XIEventMask::BUTTON_PRESS
+                            | xinput::XIEventMask::BUTTON_RELEASE
+                            | xinput::XIEventMask::ENTER
+                            | xinput::XIEventMask::LEAVE,
+                    ],
+                }],
+            ),
+        )?;
+
+        check_reply(
+            || "X11 XiSelectEvents for device changes on external window failed.",
+            xcb.xinput_xi_select_events(
+                x_window,
+                &[xinput::EventMask {
+                    deviceid: XINPUT_ALL_DEVICES,
+                    mask: vec![
+                        xinput::XIEventMask::HIERARCHY | xinput::XIEventMask::DEVICE_CHANGED,
+                    ],
+                }],
+            ),
+        )?;
+
+        xcb_flush(xcb);
+
+        // Create the renderer for the external window
+        let renderer = {
+            let raw_window = RawWindow {
+                connection: as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(
+                    xcb,
+                ) as *mut _,
+                screen_id: x_screen_index,
+                window_id: x_window,
+                visual_id: visual.id,
+            };
+            let config = BladeSurfaceConfig {
+                size: query_render_extent(xcb, x_window)?,
+                transparent: true, // External windows should be transparent to allow layering
+            };
+            BladeRenderer::new(gpu_context, &raw_window, config)?
+        };
+
+        let display = Rc::new(X11Display::new(xcb, scale_factor, x_screen_index)?);
+        let bounds = external_handle.bounds.to_device_pixels(scale_factor);
+
+        // Note: External windows don't need sync counters or most WM hints
+        // since they're managed by the parent window
+        let sync_request_counter = 0; // Dummy counter for external windows
+
+        Ok(Self {
+            client,
+            executor,
+            display,
+            x_root_window: visual_set.root,
+            bounds: bounds.to_pixels(scale_factor),
+            scale_factor,
+            renderer,
+            atoms: *atoms,
+            input_handler: None,
+            active: false,
+            hovered: false,
+            fullscreen: false,
+            maximized_vertical: false,
+            maximized_horizontal: false,
+            hidden: false,
+            appearance,
+            handle,
+            background_appearance: WindowBackgroundAppearance::Transparent, // External windows should be transparent
+            destroyed: false,
+            client_side_decorations_supported,
+            decorations: WindowDecorations::Server,
+            last_insets: [0, 0, 0, 0],
+            edge_constraints: None,
+            counter_id: sync_request_counter,
+            last_sync_counter: None,
+        })
+    }
+
     fn content_size(&self) -> Size<Pixels> {
         let size = self.renderer.viewport_size();
         Size {
@@ -798,6 +935,51 @@ impl X11Window {
 
         let state = ptr.state.borrow_mut();
         ptr.set_wm_properties(state)?;
+
+        Ok(Self(ptr))
+    }
+
+    pub fn new_external(
+        handle: AnyWindowHandle,
+        external_handle: crate::ExternalWindowHandle,
+        client: X11ClientStatePtr,
+        executor: ForegroundExecutor,
+        gpu_context: &BladeContext,
+        xcb: &Rc<XCBConnection>,
+        client_side_decorations_supported: bool,
+        x_main_screen_index: usize,
+        atoms: &XcbAtoms,
+        appearance: WindowAppearance,
+    ) -> anyhow::Result<Self> {
+        // Extract x_window from the external handle BEFORE moving it
+        use raw_window_handle::RawWindowHandle;
+        let x_window = match external_handle.raw_handle {
+            RawWindowHandle::Xcb(handle) => handle.window.get() as xproto::Window,
+            RawWindowHandle::Xlib(handle) => handle.window as xproto::Window,
+            _ => return Err(anyhow::anyhow!("Invalid window handle type for X11")),
+        };
+
+        let state = X11WindowState::new_external(
+            handle,
+            external_handle,
+            client,
+            executor.clone(),
+            gpu_context,
+            xcb,
+            client_side_decorations_supported,
+            x_main_screen_index,
+            atoms,
+            appearance,
+        )?;
+
+        let ptr = X11WindowStatePtr {
+            state: Rc::new(RefCell::new(state)),
+            callbacks: Rc::new(RefCell::new(Callbacks::default())),
+            xcb: xcb.clone(),
+            x_window,
+        };
+
+        // Don't set WM properties for external windows - they're managed by the parent
 
         Ok(Self(ptr))
     }

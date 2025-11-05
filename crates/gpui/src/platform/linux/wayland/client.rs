@@ -711,6 +711,27 @@ impl LinuxClient for WaylandClient {
         Ok(Box::new(window))
     }
 
+    fn open_window_external(
+        &self,
+        handle: AnyWindowHandle,
+        external_handle: crate::ExternalWindowHandle,
+    ) -> anyhow::Result<Box<dyn PlatformWindow>> {
+        let mut state = self.0.borrow_mut();
+
+        let (window, surface_id) = WaylandWindow::new_external(
+            handle,
+            external_handle,
+            state.globals.clone(),
+            &state.gpu_context,
+            WaylandClientStatePtr(Rc::downgrade(&self.0)),
+            state.common.appearance,
+        )?;
+        state.windows.insert(surface_id, window.0.clone());
+
+        log::info!("✅ Wayland external window created successfully");
+        Ok(Box::new(window))
+    }
+
     fn set_cursor_style(&self, style: CursorStyle) {
         let mut state = self.0.borrow_mut();
 

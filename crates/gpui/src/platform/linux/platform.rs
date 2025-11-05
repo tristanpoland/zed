@@ -63,6 +63,15 @@ pub trait LinuxClient {
         handle: AnyWindowHandle,
         options: WindowParams,
     ) -> anyhow::Result<Box<dyn PlatformWindow>>;
+
+    fn open_window_external(
+        &self,
+        _handle: AnyWindowHandle,
+        _external_handle: crate::ExternalWindowHandle,
+    ) -> anyhow::Result<Box<dyn PlatformWindow>> {
+        Err(anyhow::anyhow!("External window mode not supported on this Linux compositor"))
+    }
+
     fn set_cursor_style(&self, style: CursorStyle);
     fn open_uri(&self, uri: &str);
     fn reveal_path(&self, path: PathBuf);
@@ -278,6 +287,14 @@ impl<P: LinuxClient + 'static> Platform for P {
         options: WindowParams,
     ) -> anyhow::Result<Box<dyn PlatformWindow>> {
         self.open_window(handle, options)
+    }
+
+    fn open_window_external(
+        &self,
+        handle: AnyWindowHandle,
+        external_handle: crate::ExternalWindowHandle,
+    ) -> anyhow::Result<Box<dyn PlatformWindow>> {
+        LinuxClient::open_window_external(self, handle, external_handle)
     }
 
     fn open_url(&self, url: &str) {

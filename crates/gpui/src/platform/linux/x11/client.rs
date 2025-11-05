@@ -1497,6 +1497,61 @@ impl LinuxClient for X11Client {
         Ok(Box::new(window))
     }
 
+    fn open_window_external(
+        &self,
+        handle: AnyWindowHandle,
+        external_handle: crate::ExternalWindowHandle,
+    ) -> anyhow::Result<Box<dyn PlatformWindow>> {
+        let mut state = self.0.borrow_mut();
+
+        // Extract the X11 window ID from the external handle
+        use raw_window_handle::RawWindowHandle;
+        let x_window = match external_handle.raw_handle {
+            RawWindowHandle::Xcb(handle) => handle.window.get() as xproto::Window,
+            RawWindowHandle::Xlib(handle) => handle.window as xproto::Window,
+            _ => return Err(anyhow::anyhow!("Invalid window handle type for X11")),
+        };
+
+        let window = X11Window::new_external(
+            handle,
+            external_handle,
+            X11ClientStatePtr(Rc::downgrade(&self.0)),
+            state.common.foreground_executor.clone(),
+            &state.gpu_context,
+            &state.xcb_connection,
+            state.client_side_decorations_supported,
+            state.x_root_index,
+            &state.atoms,
+            state.common.appearance,
+        )?;
+
+        // Set up drag-and-drop support on the external window
+        check_reply(
+            || "Failed to set XdndAware property on external window",
+            state.xcb_connection.change_property32(
+                xproto::PropMode::REPLACE,
+                x_window,
+                state.atoms.XdndAware,
+                state.atoms.XA_ATOM,
+                &[5],
+            ),
+        )
+        .log_err();
+        xcb_flush(&state.xcb_connection);
+
+        let window_ref = WindowRef {
+            window: window.0.clone(),
+            refresh_state: None,
+            expose_event_received: false,
+            last_visibility: Visibility::UNOBSCURED,
+            is_mapped: true, // External windows are already mapped by the parent
+        };
+
+        state.windows.insert(x_window, window_ref);
+        log::info!("✅ X11 external window created successfully");
+        Ok(Box::new(window))
+    }
+
     fn set_cursor_style(&self, style: CursorStyle) {
         let mut state = self.0.borrow_mut();
         let Some(focused_window) = state.mouse_focused_window else {

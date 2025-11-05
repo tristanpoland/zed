@@ -334,6 +334,89 @@ impl WaylandWindow {
 
         Ok((this, surface.id()))
     }
+
+    pub fn new_external(
+        handle: AnyWindowHandle,
+        external_handle: crate::ExternalWindowHandle,
+        globals: Globals,
+        gpu_context: &BladeContext,
+        client: WaylandClientStatePtr,
+        appearance: WindowAppearance,
+    ) -> anyhow::Result<(Self, ObjectId)> {
+        use raw_window_handle::RawWindowHandle;
+
+        // For Wayland, wrapping external surfaces is complex due to the protocol's design.
+        // The surface must be created through the compositor protocol, not from a raw pointer.
+        // For now, we create a new surface through GPUI's standard path.
+        // TODO: Investigate if wayland-rs supports reconstructing proxy objects from raw pointers
+
+        // Verify we have a Wayland handle
+        match external_handle.raw_handle {
+            RawWindowHandle::Wayland(_handle) => {
+                // We'll create our own surface for now since reconstructing from raw pointer
+                // requires access to the Backend's internal connection which isn't exposed
+            },
+            _ => return Err(anyhow::anyhow!("Invalid window handle type for Wayland")),
+        };
+
+        // Create a new surface through the compositor
+        let surface = globals.compositor.create_surface(&globals.qh, ());
+
+        // Create XDG surface and toplevel for the external surface
+        let xdg_surface = globals
+            .wm_base
+            .get_xdg_surface(&surface, &globals.qh, surface.id());
+        let toplevel = xdg_surface.get_toplevel(&globals.qh, surface.id());
+
+        if let Some(fractional_scale_manager) = globals.fractional_scale_manager.as_ref() {
+            fractional_scale_manager.get_fractional_scale(&surface, &globals.qh, surface.id());
+        }
+
+        // External windows should not have decorations since they're managed by the parent
+        let decoration = None;
+
+        let viewport = globals
+            .viewporter
+            .as_ref()
+            .map(|viewporter| viewporter.get_viewport(&surface, &globals.qh, ()));
+
+        // Create a minimal WindowParams for external window
+        let params = WindowParams {
+            bounds: external_handle.bounds,
+            titlebar: None,
+            focus: false,
+            show: true,
+            kind: WindowKind::Normal,
+            is_movable: false,
+            is_resizable: false,
+            is_minimizable: false,
+            display_id: None,
+            window_min_size: None,
+        };
+
+        let this = Self(WaylandWindowStatePtr {
+            state: Rc::new(RefCell::new(WaylandWindowState::new(
+                handle,
+                surface.clone(),
+                xdg_surface,
+                toplevel,
+                decoration,
+                appearance,
+                viewport,
+                client,
+                globals,
+                gpu_context,
+                params,
+            )?)),
+            callbacks: Rc::new(RefCell::new(Callbacks::default())),
+        });
+
+        // Commit the surface to apply changes
+        surface.commit();
+
+        log::info!("Created Wayland external window with surface ID: {:?}", surface.id());
+        Ok((this, surface.id()))
+    }
 }
 
 impl WaylandWindowStatePtr {
