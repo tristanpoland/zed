@@ -802,6 +802,8 @@ impl App {
                 let clear = window.draw(cx);
                 window.present();  // Present the rendered frame to the screen
                 clear.clear();
+                // Clear the refreshing flag manually since complete_frame is private
+                window.refreshing = false;
             });
         }
     }

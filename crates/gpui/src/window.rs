@@ -2161,7 +2161,10 @@ impl Window {
         self.capslock
     }
 
-    fn complete_frame(&self) {
+    fn complete_frame(&mut self) {
+        self.refreshing = false;
+        self.invalidator.set_phase(DrawPhase::None);
+        self.needs_present.set(true);
         self.platform_window.completed_frame();
     }
 
@@ -5066,6 +5069,16 @@ impl<V: 'static + Render> WindowHandle<V> {
     pub fn is_active(&self, cx: &mut App) -> Option<bool> {
         cx.update_window(self.any_handle, |_, window, _| window.is_window_active())
             .ok()
+    }
+    
+    /// Check if this window needs rendering (is dirty or refreshing)
+    /// Useful for external window integrations to poll if a frame should be drawn
+    pub fn needs_render(&self, cx: &App) -> bool {
+        cx.windows
+            .get(self.window_id())
+            .and_then(|w| w.as_ref())
+            .map(|w| w.invalidator.is_dirty() || w.refreshing)
+            .unwrap_or(false)
     }
     
     /// Inject an input event into this window from an external source.

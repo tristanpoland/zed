@@ -899,6 +899,10 @@ impl PlatformWindow for WindowsWindow {
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.0.state.borrow_mut().callbacks.request_frame = Some(callback);
     }
+    
+    fn trigger_frame(&self) {
+        // Not used for external windows - polling approach is used instead
+    }
 
     fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>) {
         self.0.state.borrow_mut().callbacks.input = Some(callback);
