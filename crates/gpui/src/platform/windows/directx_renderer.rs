@@ -323,9 +323,7 @@ impl DirectXRenderer {
         use std::sync::atomic::{AtomicU32, Ordering};
         static DRAW_COUNT: AtomicU32 = AtomicU32::new(0);
         let count = DRAW_COUNT.fetch_add(1, Ordering::Relaxed);
-        if count % 60 == 0 {
-            eprintln!("🖌️  DirectXRenderer::draw() called (frame {})", count + 1);
-        }
+
         self.pre_draw()?;
         for batch in scene.batches() {
             match batch {

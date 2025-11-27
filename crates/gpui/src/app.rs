@@ -792,9 +792,6 @@ impl App {
         use std::sync::atomic::{AtomicU32, Ordering};
         static CALL_COUNT: AtomicU32 = AtomicU32::new(0);
         let count = CALL_COUNT.fetch_add(1, Ordering::Relaxed);
-        if count % 60 == 0 {
-            eprintln!("🎯 App::draw_windows() called (frame {}), {} windows", count + 1, windows_to_draw.len());
-        }
 
         // Now draw and present each window using update_window
         for window_handle in windows_to_draw {
