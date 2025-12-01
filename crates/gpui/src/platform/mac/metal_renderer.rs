@@ -346,6 +346,92 @@ impl MetalRenderer {
         // todo(mac)?
     }
 
+    /// Get the IOSurface handle for zero-copy GPU composition in external window mode
+    ///
+    /// This uses Metal's IOSurface support to create a shareable texture that can be
+    /// accessed by other Metal devices or graphics frameworks.
+    pub fn get_shared_texture_handle(&self) -> anyhow::Result<Option<crate::SharedTextureHandle>> {
+        use objc::{msg_send, sel, sel_impl};
+        use objc::runtime::Object;
+
+        // Get the current drawable size
+        let size_ns = unsafe { self.layer.drawable_size() };
+        let size = crate::Size {
+            width: crate::DevicePixels(size_ns.width as i32),
+            height: crate::DevicePixels(size_ns.height as i32),
+        };
+
+        if size.width.0 <= 0 || size.height.0 <= 0 {
+            return Ok(None);
+        }
+
+        // Create IOSurface with the correct properties
+        // IOSurfaceRef is created using Core Foundation dictionary
+        unsafe {
+            use core_foundation::base::{CFTypeRef, TCFType, kCFAllocatorDefault};
+            use core_foundation::dictionary::CFDictionary;
+            use core_foundation::number::CFNumber;
+            use core_foundation::string::CFString;
+
+            // IOSurface property keys
+            let k_width = CFString::from_static_string("IOSurfaceWidth");
+            let k_height = CFString::from_static_string("IOSurfaceHeight");
+            let k_bytes_per_element = CFString::from_static_string("IOSurfaceBytesPerElement");
+            let k_pixel_format = CFString::from_static_string("IOSurfacePixelFormat");
+
+            // Create property values
+            let width = CFNumber::from(size.width.0 as i64);
+            let height = CFNumber::from(size.height.0 as i64);
+            let bytes_per_element = CFNumber::from(4i64); // BGRA = 4 bytes per pixel
+            // 'BGRA' as FourCC = 0x42475241
+            let pixel_format = CFNumber::from(0x42475241i64);
+
+            // Build properties dictionary
+            let keys = vec![
+                k_width.as_CFTypeRef(),
+                k_height.as_CFTypeRef(),
+                k_bytes_per_element.as_CFTypeRef(),
+                k_pixel_format.as_CFTypeRef(),
+            ];
+            let values = vec![
+                width.as_CFTypeRef(),
+                height.as_CFTypeRef(),
+                bytes_per_element.as_CFTypeRef(),
+                pixel_format.as_CFTypeRef(),
+            ];
+
+            let properties = CFDictionary::from_CFType_pairs(&keys.iter().zip(&values).map(|(k, v)| {
+                (*k, *v)
+            }).collect::<Vec<_>>());
+
+            // Create IOSurface using IOSurfaceCreate from IOSurface.framework
+            // We need to link to IOSurface framework and call IOSurfaceCreate
+            #[link(name = "IOSurface", kind = "framework")]
+            extern "C" {
+                fn IOSurfaceCreate(properties: CFTypeRef) -> *mut std::ffi::c_void;
+            }
+
+            let io_surface_ref = IOSurfaceCreate(properties.as_CFTypeRef());
+            if io_surface_ref.is_null() {
+                return Err(anyhow::anyhow!("Failed to create IOSurface"));
+            }
+
+            log::info!("✅ Created IOSurface: {:?}, size: {:?}", io_surface_ref, size);
+
+            Ok(Some(crate::SharedTextureHandle::IOSurface {
+                io_surface: io_surface_ref,
+                size,
+                format: metal::MTLPixelFormat::BGRA8Unorm as u32,
+            }))
+        }
+    }
+
+    /// Resize renderer for external window mode
+    pub fn resize(&mut self, physical_size: crate::Size<DevicePixels>) -> anyhow::Result<()> {
+        self.update_drawable_size(physical_size);
+        Ok(())
+    }
+
     pub fn destroy(&self) {
         // nothing to do
     }

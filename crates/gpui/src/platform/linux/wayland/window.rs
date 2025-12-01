@@ -25,7 +25,7 @@ use wayland_protocols::{
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur;
 
 use crate::{
-    AnyWindowHandle, Bounds, Decorations, Globals, GpuSpecs, Modifiers, Output, Pixels,
+    AnyWindowHandle, Bounds, Decorations, DevicePixels, Globals, GpuSpecs, Modifiers, Output, Pixels,
     PlatformDisplay, PlatformInput, Point, PromptButton, PromptLevel, RequestFrameOptions,
     ResizeEdge, Size, Tiling, WaylandClientStatePtr, WindowAppearance, WindowBackgroundAppearance,
     WindowBounds, WindowControlArea, WindowControls, WindowDecorations, WindowParams, px, size,
@@ -1179,6 +1179,18 @@ impl PlatformWindow for WaylandWindow {
 
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.borrow().renderer.gpu_specs().into()
+    }
+
+    fn resize_renderer(&self, physical_size: crate::Size<DevicePixels>) -> anyhow::Result<()> {
+        self.borrow_mut().renderer.resize(physical_size)
+    }
+
+    fn update_logical_size(&self, _logical_size: crate::Size<Pixels>) {
+        // Wayland handles logical size through the window system
+    }
+
+    fn get_shared_texture_handle(&self) -> anyhow::Result<Option<crate::SharedTextureHandle>> {
+        self.borrow().renderer.get_shared_texture_handle()
     }
 }
 

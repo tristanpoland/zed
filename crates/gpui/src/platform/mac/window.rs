@@ -1558,6 +1558,18 @@ impl PlatformWindow for MacWindow {
         None
     }
 
+    fn resize_renderer(&self, physical_size: crate::Size<DevicePixels>) -> anyhow::Result<()> {
+        self.0.lock().renderer.resize(physical_size)
+    }
+
+    fn update_logical_size(&self, _logical_size: crate::Size<Pixels>) {
+        // macOS updates logical size automatically through the window system
+    }
+
+    fn get_shared_texture_handle(&self) -> anyhow::Result<Option<crate::SharedTextureHandle>> {
+        self.0.lock().renderer.get_shared_texture_handle()
+    }
+
     fn update_ime_position(&self, _bounds: Bounds<Pixels>) {
         let executor = self.0.lock().executor.clone();
         executor

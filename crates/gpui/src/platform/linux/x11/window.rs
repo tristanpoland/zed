@@ -1849,4 +1849,16 @@ impl PlatformWindow for X11Window {
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.0.state.borrow().renderer.gpu_specs().into()
     }
+
+    fn resize_renderer(&self, physical_size: crate::Size<DevicePixels>) -> anyhow::Result<()> {
+        self.0.state.borrow_mut().renderer.resize(physical_size)
+    }
+
+    fn update_logical_size(&self, _logical_size: crate::Size<Pixels>) {
+        // X11 handles logical size through the window system
+    }
+
+    fn get_shared_texture_handle(&self) -> anyhow::Result<Option<crate::SharedTextureHandle>> {
+        self.0.state.borrow().renderer.get_shared_texture_handle()
+    }
 }

@@ -952,22 +952,20 @@ impl PlatformWindow for WindowsWindow {
         self.0.hwnd
     }
 
-    fn get_shared_texture_handle(&self) -> Option<*mut std::ffi::c_void> {
-        self.0
-            .state
-            .borrow()
-            .renderer
-            .get_shared_texture_handle()
-            .ok()
-            .flatten()
-    }
-
     fn resize_renderer(&self, physical_size: crate::Size<DevicePixels>) -> anyhow::Result<()> {
         self.0.state.borrow_mut().renderer.resize(physical_size)
     }
 
     fn update_logical_size(&self, logical_size: crate::Size<Pixels>) {
         self.0.state.borrow_mut().logical_size = logical_size;
+    }
+
+    fn get_shared_texture_handle(&self) -> anyhow::Result<Option<crate::SharedTextureHandle>> {
+        self.0
+            .state
+            .borrow()
+            .renderer
+            .get_shared_texture_handle()
     }
 
     fn gpu_specs(&self) -> Option<GpuSpecs> {
@@ -980,15 +978,13 @@ impl PlatformWindow for WindowsWindow {
 }
 
 impl WindowsWindow {
-    /// Get the shared D3D11 texture handle for zero-copy GPU composition in external window mode
-    pub fn get_shared_texture_handle(&self) -> Option<*mut std::ffi::c_void> {
+    /// Get the shared texture handle for zero-copy GPU composition in external window mode
+    pub fn get_shared_texture_handle(&self) -> anyhow::Result<Option<crate::SharedTextureHandle>> {
         self.0
             .state
             .borrow()
             .renderer
             .get_shared_texture_handle()
-            .ok()
-            .flatten()
     }
 
     /// Resize the GPUI renderer's internal buffers for external window mode

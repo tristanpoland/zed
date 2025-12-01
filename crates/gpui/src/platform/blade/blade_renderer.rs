@@ -526,6 +526,29 @@ impl BladeRenderer {
         }
     }
 
+    /// Get the shared texture handle for zero-copy GPU composition in external window mode
+    ///
+    /// On Linux, this attempts to export the Vulkan texture as a DMA-BUF file descriptor.
+    pub fn get_shared_texture_handle(&self) -> anyhow::Result<Option<crate::SharedTextureHandle>> {
+        let size = crate::Size {
+            width: crate::DevicePixels(self.surface_config.size.width as i32),
+            height: crate::DevicePixels(self.surface_config.size.height as i32),
+        };
+
+        if size.width.0 <= 0 || size.height.0 <= 0 {
+            return Ok(None);
+        }
+
+        // Attempt DMA-BUF export using Vulkan external memory extensions
+        super::dmabuf_export::export_texture_as_dmabuf(size, self.surface.info().format)
+    }
+
+    /// Resize renderer for external window mode
+    pub fn resize(&mut self, physical_size: crate::Size<DevicePixels>) -> anyhow::Result<()> {
+        self.update_drawable_size(physical_size);
+        Ok(())
+    }
+
     #[cfg_attr(
         any(target_os = "macos", feature = "wayland", target_os = "windows"),
         allow(dead_code)

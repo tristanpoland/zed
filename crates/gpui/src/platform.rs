@@ -553,17 +553,10 @@ pub(crate) trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     #[cfg(target_os = "windows")]
     fn get_raw_handle(&self) -> windows::HWND;
 
-    /// Gets the shared D3D11 texture handle for zero-copy GPU composition (Windows only)
-    #[cfg(target_os = "windows")]
-    fn get_shared_texture_handle(&self) -> Option<*mut std::ffi::c_void> {
-        None
-    }
-
     /// Resize the GPUI renderer's internal buffers (for external windows)
     /// This should be called when an external window is resized to ensure GPUI's
     /// rendering buffers match the new window size.
     /// physical_size should be in device pixels (logical pixels × scale factor)
-    #[cfg(target_os = "windows")]
     fn resize_renderer(&self, physical_size: Size<DevicePixels>) -> Result<()> {
         let _ = physical_size;
         Ok(())
@@ -572,9 +565,26 @@ pub(crate) trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     /// Update the logical size of the window (for external windows)
     /// This updates GPUI's understanding of the window dimensions for layout.
     /// logical_size should be in logical pixels (physical pixels / scale factor)
-    #[cfg(target_os = "windows")]
     fn update_logical_size(&self, logical_size: Size<Pixels>) {
         let _ = logical_size;
+    }
+
+    /// Get the shared texture handle for zero-copy GPU composition in external window mode.
+    ///
+    /// Returns a platform-specific handle that can be used to access the same GPU texture
+    /// from a different graphics context (e.g., sharing between GPUI and Bevy).
+    ///
+    /// ## Platform Support
+    /// - **Windows**: Returns D3D11 NT Handle via `IDXGIResource::GetSharedHandle()`
+    /// - **macOS**: Returns IOSurface handle for Metal texture sharing
+    /// - **Linux**: Returns DMA-BUF file descriptor for Vulkan texture sharing
+    ///
+    /// ## Returns
+    /// - `Ok(Some(handle))`: Successfully retrieved shared texture handle
+    /// - `Ok(None)`: Not in external window mode or shared textures not supported
+    /// - `Err(_)`: Failed to retrieve the handle
+    fn get_shared_texture_handle(&self) -> Result<Option<crate::SharedTextureHandle>> {
+        Ok(None)
     }
 
     // Linux specific methods

@@ -180,7 +180,7 @@ impl DirectXRenderer {
     }
 
     /// Get the shared texture handle for external window composition (zero-copy GPU blitting)
-    pub(crate) fn get_shared_texture_handle(&self) -> Result<Option<*mut std::ffi::c_void>> {
+    pub(crate) fn get_shared_texture_handle(&self) -> Result<Option<crate::SharedTextureHandle>> {
         // Only available when using offscreen rendering (no swap chain)
         if self.resources.swap_chain.is_some() {
             log::warn!("❌ Cannot get shared handle - using swap chain, not offscreen texture");
@@ -193,8 +193,27 @@ impl DirectXRenderer {
         let texture = &*self.resources.render_target;
         let resource: IDXGIResource = texture.cast()?;
         let handle = unsafe { resource.GetSharedHandle()? };
-        log::info!("✅ Got shared texture handle: {:?}", handle.0);
-        Ok(Some(handle.0 as *mut std::ffi::c_void))
+
+        // Get texture description for size and format info
+        let desc = unsafe {
+            let mut desc = std::mem::zeroed();
+            texture.GetDesc(&mut desc);
+            desc
+        };
+
+        let size = crate::Size {
+            width: crate::DevicePixels(desc.Width as i32),
+            height: crate::DevicePixels(desc.Height as i32),
+        };
+
+        log::info!("✅ Got shared texture handle: {:?}, size: {:?}, format: {:?}",
+                   handle.0, size, desc.Format.0);
+
+        Ok(Some(crate::SharedTextureHandle::D3D11NTHandle {
+            handle: handle.0 as *mut std::ffi::c_void,
+            size,
+            format: desc.Format.0 as u32,
+        }))
     }
 
     fn pre_draw(&self) -> Result<()> {

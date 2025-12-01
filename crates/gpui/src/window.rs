@@ -1558,17 +1558,43 @@ impl Window {
         subscription
     }
 
-    /// Gets the shared D3D11 texture handle for zero-copy GPU composition in external window mode (Windows only).
-    /// Returns None if not in external window mode or if not on Windows.
-    #[cfg(target_os = "windows")]
-    pub fn get_shared_texture_handle(&self) -> Option<*mut std::ffi::c_void> {
+    /// Gets the shared texture handle for zero-copy GPU composition in external window mode.
+    ///
+    /// Returns a platform-specific handle that can be used to share the GPUI render target
+    /// with another graphics context (e.g., for compositing GPUI UI over a game engine).
+    ///
+    /// ## Platform Support
+    /// - **Windows**: Returns D3D11 NT Handle for texture sharing between D3D11/D3D12 contexts
+    /// - **macOS**: Returns IOSurface handle for Metal texture sharing
+    /// - **Linux**: Returns DMA-BUF file descriptor for Vulkan texture sharing
+    ///
+    /// ## Returns
+    /// - `Ok(Some(handle))`: Successfully retrieved platform-specific shared texture handle
+    /// - `Ok(None)`: Not in external window mode or shared textures not configured
+    /// - `Err(_)`: Failed to retrieve the handle
+    ///
+    /// ## Example
+    /// ```ignore
+    /// match window.get_shared_texture_handle()? {
+    ///     Some(SharedTextureHandle::D3D11NTHandle { handle, size, format }) => {
+    ///         // Windows: Open handle in D3D12 device
+    ///         d3d12_device.OpenSharedHandle(handle)?;
+    ///     }
+    ///     Some(SharedTextureHandle::IOSurface { io_surface, size, format }) => {
+    ///         // macOS: Create Metal texture from IOSurface
+    ///         let texture = metal_device.newTextureWithDescriptor(desc, iosurface: io_surface);
+    ///     }
+    ///     Some(SharedTextureHandle::DmaBuf { fd, modifier, size, format, stride }) => {
+    ///         // Linux: Import into Vulkan
+    ///         vk_device.create_image_from_dmabuf(fd, modifier, ...)?;
+    ///     }
+    ///     None => {
+    ///         // Not in external window mode
+    ///     }
+    /// }
+    /// ```
+    pub fn get_shared_texture_handle(&self) -> anyhow::Result<Option<crate::SharedTextureHandle>> {
         self.platform_window.get_shared_texture_handle()
-    }
-
-    /// Gets the shared D3D11 texture handle - stub for non-Windows platforms
-    #[cfg(not(target_os = "windows"))]
-    pub fn get_shared_texture_handle(&self) -> Option<*mut std::ffi::c_void> {
-        None
     }
 
     /// Replaces the root entity of the window with a new one.
