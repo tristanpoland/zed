@@ -695,7 +695,7 @@ impl LinuxClient for WaylandClient {
     ) -> anyhow::Result<Box<dyn PlatformWindow>> {
         let mut state = self.0.borrow_mut();
 
-        let parent = state.keyboard_focused_window.as_ref().map(|w| w.toplevel());
+        let parent = state.keyboard_focused_window.as_ref().and_then(|w| w.toplevel());
 
         let (window, surface_id) = WaylandWindow::new(
             handle,

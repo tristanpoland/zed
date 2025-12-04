@@ -540,7 +540,9 @@ impl BladeRenderer {
         }
 
         // Attempt DMA-BUF export using Vulkan external memory extensions
-        super::dmabuf_export::export_texture_as_dmabuf(size, self.surface.info().format)
+        // Note: Currently returns None because blade-graphics doesn't expose internal Vulkan handles
+        let dummy_texture = blade_graphics::Texture::default();
+        super::dmabuf_export::export_texture_as_dmabuf(&self.gpu, dummy_texture, size, self.surface.info().format)
     }
 
     /// Resize renderer for external window mode

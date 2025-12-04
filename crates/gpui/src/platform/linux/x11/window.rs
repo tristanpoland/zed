@@ -273,6 +273,9 @@ pub struct X11WindowState {
     edge_constraints: Option<EdgeConstraints>,
     pub handle: AnyWindowHandle,
     last_insets: [u32; 4],
+    /// Flag indicating this is an external window managed by another framework (e.g., Winit)
+    /// External windows should not modify event masks or WM properties
+    is_external_window: bool,
 }
 
 impl X11WindowState {
@@ -692,6 +695,7 @@ impl X11WindowState {
                 edge_constraints: None,
                 counter_id: sync_request_counter,
                 last_sync_counter: None,
+                is_external_window: false, // Normal windows are not external
             })
         });
 
@@ -738,57 +742,14 @@ impl X11WindowState {
                 visual_set.inherit
             }
         };
+        log::info!("🔧 External window detected - skipping event mask modifications");
         log::info!("External window using visual: {:?}", visual);
 
-        // Set up event masks on the external window so we can receive events
-        let event_mask = xproto::EventMask::EXPOSURE
-            | xproto::EventMask::STRUCTURE_NOTIFY
-            | xproto::EventMask::FOCUS_CHANGE
-            | xproto::EventMask::KEY_PRESS
-            | xproto::EventMask::KEY_RELEASE
-            | xproto::EventMask::PROPERTY_CHANGE
-            | xproto::EventMask::VISIBILITY_CHANGE;
-
-        check_reply(
-            || "X11 ChangeWindowAttributes for external window failed.",
-            xcb.change_window_attributes(
-                x_window,
-                &xproto::ChangeWindowAttributesAux::new().event_mask(event_mask),
-            ),
-        )?;
-
-        // Set up XInput events for mouse/touch input
-        check_reply(
-            || "X11 XiSelectEvents for external window failed.",
-            xcb.xinput_xi_select_events(
-                x_window,
-                &[xinput::EventMask {
-                    deviceid: XINPUT_ALL_DEVICE_GROUPS,
-                    mask: vec![
-                        xinput::XIEventMask::MOTION
-                            | xinput::XIEventMask::BUTTON_PRESS
-                            | xinput::XIEventMask::BUTTON_RELEASE
-                            | xinput::XIEventMask::ENTER
-                            | xinput::XIEventMask::LEAVE,
-                    ],
-                }],
-            ),
-        )?;
-
-        check_reply(
-            || "X11 XiSelectEvents for device changes on external window failed.",
-            xcb.xinput_xi_select_events(
-                x_window,
-                &[xinput::EventMask {
-                    deviceid: XINPUT_ALL_DEVICES,
-                    mask: vec![
-                        xinput::XIEventMask::HIERARCHY | xinput::XIEventMask::DEVICE_CHANGED,
-                    ],
-                }],
-            ),
-        )?;
-
-        xcb_flush(xcb);
+        // CRITICAL: Do NOT modify event masks for external windows!
+        // The external window manager (Winit) has already configured them.
+        // Modifying event masks on external windows can cause conflicts.
+        //
+        // Event handling will be done by Winit, and GPUI will only render to the surface.
 
         // Create the renderer for the external window
         let renderer = {
@@ -840,6 +801,7 @@ impl X11WindowState {
             edge_constraints: None,
             counter_id: sync_request_counter,
             last_sync_counter: None,
+            is_external_window: true, // This is an external window
         })
     }
 

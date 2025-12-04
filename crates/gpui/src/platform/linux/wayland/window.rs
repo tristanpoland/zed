@@ -83,14 +83,18 @@ struct InProgressConfigure {
 }
 
 pub struct WaylandWindowState {
-    xdg_surface: xdg_surface::XdgSurface,
+    /// XDG surface - None for external windows managed by Winit
+    xdg_surface: Option<xdg_surface::XdgSurface>,
     acknowledged_first_configure: bool,
     pub surface: wl_surface::WlSurface,
     decoration: Option<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1>,
     app_id: Option<String>,
     appearance: WindowAppearance,
     blur: Option<org_kde_kwin_blur::OrgKdeKwinBlur>,
-    toplevel: xdg_toplevel::XdgToplevel,
+    /// XDG toplevel - None for external windows managed by Winit
+    toplevel: Option<xdg_toplevel::XdgToplevel>,
+    /// Flag indicating this is an external window (managed by Winit)
+    is_external_window: bool,
     viewport: Option<wp_viewport::WpViewport>,
     outputs: HashMap<ObjectId, Output>,
     display: Option<(ObjectId, Output)>,
@@ -126,11 +130,12 @@ impl WaylandWindowState {
     pub(crate) fn new(
         handle: AnyWindowHandle,
         surface: wl_surface::WlSurface,
-        xdg_surface: xdg_surface::XdgSurface,
-        toplevel: xdg_toplevel::XdgToplevel,
+        xdg_surface: Option<xdg_surface::XdgSurface>,
+        toplevel: Option<xdg_toplevel::XdgToplevel>,
         decoration: Option<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1>,
         appearance: WindowAppearance,
         viewport: Option<wp_viewport::WpViewport>,
+        is_external_window: bool,
         client: WaylandClientStatePtr,
         globals: Globals,
         gpu_context: &BladeContext,
@@ -165,6 +170,7 @@ impl WaylandWindowState {
             app_id: None,
             blur: None,
             toplevel,
+            is_external_window,
             viewport,
             globals,
             outputs: HashMap::default(),
@@ -243,11 +249,16 @@ impl Drop for WaylandWindow {
         if let Some(blur) = &state.blur {
             blur.release();
         }
-        state.toplevel.destroy();
+        // Only destroy XDG objects if they exist (not for external windows)
+        if let Some(toplevel) = &state.toplevel {
+            toplevel.destroy();
+        }
         if let Some(viewport) = &state.viewport {
             viewport.destroy();
         }
-        state.xdg_surface.destroy();
+        if let Some(xdg_surface) = &state.xdg_surface {
+            xdg_surface.destroy();
+        }
         state.surface.destroy();
 
         let state_ptr = self.0.clone();
@@ -316,11 +327,12 @@ impl WaylandWindow {
             state: Rc::new(RefCell::new(WaylandWindowState::new(
                 handle,
                 surface.clone(),
-                xdg_surface,
-                toplevel,
+                Some(xdg_surface), // Normal windows have XDG surface
+                Some(toplevel), // Normal windows have XDG toplevel
                 decoration,
                 appearance,
                 viewport,
+                false, // is_external_window = false
                 client,
                 globals,
                 gpu_context,
@@ -345,28 +357,33 @@ impl WaylandWindow {
     ) -> anyhow::Result<(Self, ObjectId)> {
         use raw_window_handle::RawWindowHandle;
 
-        // For Wayland, wrapping external surfaces is complex due to the protocol's design.
-        // The surface must be created through the compositor protocol, not from a raw pointer.
-        // For now, we create a new surface through GPUI's standard path.
-        // TODO: Investigate if wayland-rs supports reconstructing proxy objects from raw pointers
-
         // Verify we have a Wayland handle
         match external_handle.raw_handle {
             RawWindowHandle::Wayland(_handle) => {
-                // We'll create our own surface for now since reconstructing from raw pointer
-                // requires access to the Backend's internal connection which isn't exposed
+                // For Wayland, wrapping external surfaces is complex due to the protocol's design.
+                // The surface must be created through the compositor protocol.
+                // GPUI will render to this surface, and export it as a shared texture (DMA-BUF)
+                // for the outer compositor to read. The external window handle is used for
+                // bounds/scale information only.
             },
             _ => return Err(anyhow::anyhow!("Invalid window handle type for Wayland")),
         };
 
-        // Create a new surface through the compositor
+        // Create a new surface through the compositor for GPUI to render to
         let surface = globals.compositor.create_surface(&globals.qh, ());
 
-        // Create XDG surface and toplevel for the external surface
-        let xdg_surface = globals
-            .wm_base
-            .get_xdg_surface(&surface, &globals.qh, surface.id());
-        let toplevel = xdg_surface.get_toplevel(&globals.qh, surface.id());
+        log::info!("✅ Created new Wayland surface for GPUI rendering (will export as shared DMA-BUF)");
+
+        // CRITICAL: Do NOT create XDG surfaces for external windows!
+        // The external window manager (Winit) has already created them.
+        // Creating XDG toplevel here causes Wayland to show a second window.
+        //
+        // For external windows, we only need to render to the surface - Winit handles everything else.
+        log::info!("🔧 External window detected - skipping XDG surface/toplevel creation");
+
+        // External windows don't need XDG objects - set to None
+        let xdg_surface = None;
+        let toplevel = None;
 
         if let Some(fractional_scale_manager) = globals.fractional_scale_manager.as_ref() {
             fractional_scale_manager.get_fractional_scale(&surface, &globals.qh, surface.id());
@@ -403,6 +420,7 @@ impl WaylandWindow {
                 decoration,
                 appearance,
                 viewport,
+                true, // is_external_window = true
                 client,
                 globals,
                 gpu_context,
@@ -428,7 +446,7 @@ impl WaylandWindowStatePtr {
         self.state.borrow().surface.clone()
     }
 
-    pub fn toplevel(&self) -> xdg_toplevel::XdgToplevel {
+    pub fn toplevel(&self) -> Option<xdg_toplevel::XdgToplevel> {
         self.state.borrow().toplevel.clone()
     }
 
@@ -449,6 +467,11 @@ impl WaylandWindowStatePtr {
     }
 
     pub fn handle_xdg_surface_event(&self, event: xdg_surface::Event) {
+        // External windows don't handle XDG events - Winit does
+        if self.state.borrow().is_external_window {
+            return;
+        }
+
         if let xdg_surface::Event::Configure { serial } = event {
             {
                 let mut state = self.state.borrow_mut();
@@ -496,22 +519,26 @@ impl WaylandWindowStatePtr {
                 }
             }
             let mut state = self.state.borrow_mut();
-            state.xdg_surface.ack_configure(serial);
 
-            let window_geometry = inset_by_tiling(
-                state.bounds.map_origin(|_| px(0.0)),
-                state.inset(),
-                state.tiling,
-            )
-            .map(|v| v.0 as i32)
-            .map_size(|v| if v <= 0 { 1 } else { v });
+            // External windows don't manage XDG configuration
+            if let Some(xdg_surface) = &state.xdg_surface {
+                xdg_surface.ack_configure(serial);
 
-            state.xdg_surface.set_window_geometry(
-                window_geometry.origin.x,
-                window_geometry.origin.y,
-                window_geometry.size.width,
-                window_geometry.size.height,
-            );
+                let window_geometry = inset_by_tiling(
+                    state.bounds.map_origin(|_| px(0.0)),
+                    state.inset(),
+                    state.tiling,
+                )
+                .map(|v| v.0 as i32)
+                .map_size(|v| if v <= 0 { 1 } else { v });
+
+                xdg_surface.set_window_geometry(
+                    window_geometry.origin.x,
+                    window_geometry.origin.y,
+                    window_geometry.size.width,
+                    window_geometry.size.height,
+                );
+            }
 
             let request_frame_callback = !state.acknowledged_first_configure;
             if request_frame_callback {
@@ -559,6 +586,11 @@ impl WaylandWindowStatePtr {
     }
 
     pub fn handle_toplevel_event(&self, event: xdg_toplevel::Event) -> bool {
+        // External windows don't handle XDG toplevel events - Winit does
+        if self.state.borrow().is_external_window {
+            return false;
+        }
+
         match event {
             xdg_toplevel::Event::Configure {
                 width,
@@ -926,12 +958,15 @@ impl PlatformWindow for WaylandWindow {
         let state_ptr = self.0.clone();
         let dp_size = size.to_device_pixels(self.scale_factor());
 
-        state.xdg_surface.set_window_geometry(
-            state.bounds.origin.x.0 as i32,
-            state.bounds.origin.y.0 as i32,
-            dp_size.width.0,
-            dp_size.height.0,
-        );
+        // External windows don't manage XDG geometry
+        if let Some(xdg_surface) = &state.xdg_surface {
+            xdg_surface.set_window_geometry(
+                state.bounds.origin.x.0 as i32,
+                state.bounds.origin.y.0 as i32,
+                dp_size.width.0,
+                dp_size.height.0,
+            );
+        }
 
         state
             .globals
@@ -1020,12 +1055,18 @@ impl PlatformWindow for WaylandWindow {
     }
 
     fn set_title(&mut self, title: &str) {
-        self.borrow().toplevel.set_title(title.to_string());
+        // External windows don't manage XDG toplevel properties
+        if let Some(toplevel) = &self.borrow().toplevel {
+            toplevel.set_title(title.to_string());
+        }
     }
 
     fn set_app_id(&mut self, app_id: &str) {
         let mut state = self.borrow_mut();
-        state.toplevel.set_app_id(app_id.to_owned());
+        // External windows don't manage XDG toplevel properties
+        if let Some(toplevel) = &state.toplevel {
+            toplevel.set_app_id(app_id.to_owned());
+        }
         state.app_id = Some(app_id.to_owned());
     }
 
@@ -1036,24 +1077,33 @@ impl PlatformWindow for WaylandWindow {
     }
 
     fn minimize(&self) {
-        self.borrow().toplevel.set_minimized();
+        // External windows don't manage XDG toplevel state
+        if let Some(toplevel) = &self.borrow().toplevel {
+            toplevel.set_minimized();
+        }
     }
 
     fn zoom(&self) {
         let state = self.borrow();
-        if !state.maximized {
-            state.toplevel.set_maximized();
-        } else {
-            state.toplevel.unset_maximized();
+        // External windows don't manage XDG toplevel state
+        if let Some(toplevel) = &state.toplevel {
+            if !state.maximized {
+                toplevel.set_maximized();
+            } else {
+                toplevel.unset_maximized();
+            }
         }
     }
 
     fn toggle_fullscreen(&self) {
         let mut state = self.borrow_mut();
-        if !state.fullscreen {
-            state.toplevel.set_fullscreen(None);
-        } else {
-            state.toplevel.unset_fullscreen();
+        // External windows don't manage XDG toplevel state
+        if let Some(toplevel) = &state.toplevel {
+            if !state.fullscreen {
+                toplevel.set_fullscreen(None);
+            } else {
+                toplevel.unset_fullscreen();
+            }
         }
     }
 
@@ -1117,28 +1167,37 @@ impl PlatformWindow for WaylandWindow {
 
     fn show_window_menu(&self, position: Point<Pixels>) {
         let state = self.borrow();
-        let serial = state.client.get_serial(SerialKind::MousePress);
-        state.toplevel.show_window_menu(
-            &state.globals.seat,
-            serial,
-            position.x.0 as i32,
-            position.y.0 as i32,
-        );
+        // External windows don't manage XDG toplevel interactions
+        if let Some(toplevel) = &state.toplevel {
+            let serial = state.client.get_serial(SerialKind::MousePress);
+            toplevel.show_window_menu(
+                &state.globals.seat,
+                serial,
+                position.x.0 as i32,
+                position.y.0 as i32,
+            );
+        }
     }
 
     fn start_window_move(&self) {
         let state = self.borrow();
-        let serial = state.client.get_serial(SerialKind::MousePress);
-        state.toplevel._move(&state.globals.seat, serial);
+        // External windows don't manage XDG toplevel interactions
+        if let Some(toplevel) = &state.toplevel {
+            let serial = state.client.get_serial(SerialKind::MousePress);
+            toplevel._move(&state.globals.seat, serial);
+        }
     }
 
     fn start_window_resize(&self, edge: crate::ResizeEdge) {
         let state = self.borrow();
-        state.toplevel.resize(
-            &state.globals.seat,
-            state.client.get_serial(SerialKind::MousePress),
-            edge.to_xdg(),
-        )
+        // External windows don't manage XDG toplevel interactions
+        if let Some(toplevel) = &state.toplevel {
+            toplevel.resize(
+                &state.globals.seat,
+                state.client.get_serial(SerialKind::MousePress),
+                edge.to_xdg(),
+            );
+        }
     }
 
     fn window_decorations(&self) -> Decorations {
