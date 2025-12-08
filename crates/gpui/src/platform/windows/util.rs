@@ -164,6 +164,26 @@ pub(crate) fn configure_dwm_dark_mode(hwnd: HWND, appearance: WindowAppearance) 
     }
 }
 
+/// Enable rounded corners for the window (Windows 11+)
+pub(crate) fn configure_dwm_rounded_corners(hwnd: HWND) {
+    use windows::Win32::Graphics::Dwm::DWMWINDOWATTRIBUTE;
+
+    // DWMWCP_ROUND = 2 (Round the corners if appropriate)
+    const DWM_WINDOW_CORNER_ROUND: u32 = 2;
+    // DWMWA_WINDOW_CORNER_PREFERENCE = 33
+    const DWMWA_WINDOW_CORNER_PREFERENCE: DWMWINDOWATTRIBUTE = DWMWINDOWATTRIBUTE(33);
+
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            &DWM_WINDOW_CORNER_ROUND as *const _ as _,
+            std::mem::size_of::<u32>() as u32,
+        )
+        .log_err();
+    }
+}
+
 #[inline]
 pub(crate) fn logical_point(x: f32, y: f32, scale_factor: f32) -> Point<Pixels> {
     Point {
