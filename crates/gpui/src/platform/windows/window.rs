@@ -908,8 +908,9 @@ impl PlatformWindow for WindowsWindow {
             // Release mouse capture and tell Windows to treat this as a title bar drag
             // This enables window dragging for borderless windows
             // HTCAPTION = 2, WM_NCLBUTTONDOWN = 0x00A1
+            // Use PostMessageW (async) instead of SendMessageW (sync) to avoid RefCell borrow conflicts
             let _ = ReleaseCapture();
-            SendMessageW(self.0.hwnd, 0x00A1u32, Some(WPARAM(2)), Some(LPARAM(0)));
+            let _ = PostMessageW(Some(self.0.hwnd), 0x00A1u32, WPARAM(2), LPARAM(0));
         }
     }
 
