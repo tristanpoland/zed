@@ -453,8 +453,9 @@ impl WindowsWindow {
         // Note: We do NOT call ShowWindow or SetWindowPos because we don't own this window
         // The external window manager (winit) handles window visibility and positioning
 
-        // Enable rounded corners (Windows 11+)
-        crate::platform::windows::util::configure_dwm_rounded_corners(hwnd);
+        // Install window subclass to handle WM_NCHITTEST for resize support on borderless windows
+        // Winit doesn't implement resize for borderless windows, so we need to handle it ourselves
+        install_borderless_resize_subclass(hwnd);
 
         Ok(Self(inner))
     }
@@ -1399,6 +1400,75 @@ fn register_drag_drop(window: &Rc<WindowsWindowInner>) -> Result<()> {
             .context("unable to register drag-drop event")?;
     }
     Ok(())
+}
+
+const BORDERLESS_RESIZE_SUBCLASS_ID: usize = 1;
+const RESIZE_BORDER_WIDTH: i32 = 8; // Width of resize border in pixels
+
+// Window subclass procedure to handle WM_NCHITTEST for borderless window resize
+// This is needed because Winit doesn't implement resize for borderless windows
+unsafe extern "system" fn borderless_resize_subclass_proc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+    _uidsubclass: usize,
+    _dwrefdata: usize,
+) -> LRESULT {
+    if msg == WM_NCHITTEST {
+        // Get window rectangle
+        let mut window_rect = RECT::default();
+        if unsafe { GetWindowRect(hwnd, &mut window_rect) }.is_ok() {
+            // Get cursor position from lparam (screen coordinates)
+            let cursor_x = lparam.signed_loword() as i32;
+            let cursor_y = lparam.signed_hiword() as i32;
+
+            // Calculate relative position within window
+            let x = cursor_x - window_rect.left;
+            let y = cursor_y - window_rect.top;
+            let width = window_rect.right - window_rect.left;
+            let height = window_rect.bottom - window_rect.top;
+
+            // Detect resize areas (check corners first, then edges)
+            let on_left = x < RESIZE_BORDER_WIDTH;
+            let on_right = x >= width - RESIZE_BORDER_WIDTH;
+            let on_top = y < RESIZE_BORDER_WIDTH;
+            let on_bottom = y >= height - RESIZE_BORDER_WIDTH;
+
+            // Return appropriate hit test code
+            if on_top && on_left {
+                return LRESULT(HTTOPLEFT as isize);
+            } else if on_top && on_right {
+                return LRESULT(HTTOPRIGHT as isize);
+            } else if on_bottom && on_left {
+                return LRESULT(HTBOTTOMLEFT as isize);
+            } else if on_bottom && on_right {
+                return LRESULT(HTBOTTOMRIGHT as isize);
+            } else if on_left {
+                return LRESULT(HTLEFT as isize);
+            } else if on_right {
+                return LRESULT(HTRIGHT as isize);
+            } else if on_top {
+                return LRESULT(HTTOP as isize);
+            } else if on_bottom {
+                return LRESULT(HTBOTTOM as isize);
+            }
+        }
+    }
+
+    // Call the default subclass procedure for all other messages
+    unsafe { DefSubclassProc(hwnd, msg, wparam, lparam) }
+}
+
+fn install_borderless_resize_subclass(hwnd: HWND) {
+    unsafe {
+        SetWindowSubclass(
+            hwnd,
+            Some(borderless_resize_subclass_proc),
+            BORDERLESS_RESIZE_SUBCLASS_ID,
+            0,
+        );
+    }
 }
 
 fn calculate_window_rect(bounds: Bounds<DevicePixels>, border_offset: WindowBorderOffset) -> RECT {
