@@ -896,6 +896,16 @@ impl PlatformWindow for WindowsWindow {
         self.0.state.borrow().is_fullscreen()
     }
 
+    fn start_window_move(&self) {
+        unsafe {
+            // Release mouse capture and tell Windows to treat this as a title bar drag
+            // This enables window dragging for borderless windows
+            // HTCAPTION = 2, WM_NCLBUTTONDOWN = 0x00A1
+            let _ = ReleaseCapture();
+            SendMessageW(self.0.hwnd, 0x00A1u32, Some(WPARAM(2)), Some(LPARAM(0)));
+        }
+    }
+
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.0.state.borrow_mut().callbacks.request_frame = Some(callback);
     }
