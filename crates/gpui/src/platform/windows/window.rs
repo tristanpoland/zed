@@ -457,6 +457,9 @@ impl WindowsWindow {
         // Winit doesn't implement resize for borderless windows, so we need to handle it ourselves
         install_borderless_resize_subclass(hwnd);
 
+        // Enable rounded corners (Windows 11+)
+        crate::platform::windows::util::configure_dwm_rounded_corners(hwnd);
+
         Ok(Self(inner))
     }
 
