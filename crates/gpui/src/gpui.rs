@@ -10,26 +10,33 @@ extern crate self as gpui;
 mod action;
 mod app;
 
-mod arena;
 mod asset_cache;
 mod assets;
-mod bounds_tree;
 mod color;
 /// The default colors used by GPUI.
 pub mod colors;
 mod element;
 mod elements;
 mod executor;
+mod platform_scheduler;
+pub(crate) use platform_scheduler::PlatformScheduler;
+mod fiber;
 mod geometry;
 mod global;
+mod identity;
 mod input;
 mod inspector;
+mod intrinsic_size;
 mod interactive;
 mod key_dispatch;
 mod keymap;
 mod path_builder;
 mod platform;
 pub mod prelude;
+mod profiler;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+mod queue;
+mod render_node;
 mod scene;
 mod shared_string;
 mod shared_texture;
@@ -40,6 +47,7 @@ mod subscription;
 mod svg_renderer;
 mod tab_stop;
 mod taffy;
+mod transform;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test;
 mod text_system;
@@ -69,7 +77,6 @@ mod seal {
 pub use action::*;
 pub use anyhow::Result;
 pub use app::*;
-pub(crate) use arena::*;
 pub use asset_cache::*;
 pub use assets::*;
 pub use color::*;
@@ -77,61 +84,57 @@ pub use ctor::ctor;
 pub use element::*;
 pub use elements::*;
 pub use executor::*;
+pub(crate) use fiber::*;
 pub use geometry::*;
 pub use global::*;
 pub use gpui_macros::{AppContext, IntoElement, Render, VisualContext, register_action, test};
 pub use http_client;
+pub(crate) use identity::*;
 pub use input::*;
 pub use inspector::*;
+pub(crate) use intrinsic_size::*;
 pub use interactive::*;
 use key_dispatch::*;
 pub use keymap::*;
 pub use path_builder::*;
 pub use platform::*;
+pub use profiler::*;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+pub(crate) use queue::{PriorityQueueReceiver, PriorityQueueSender};
 pub use refineable::*;
+pub(crate) use render_node::*;
 pub use scene::*;
 pub use shared_string::*;
 pub use shared_texture::*;
 pub use shared_uri::*;
-pub use smol::Timer;
+use std::{any::Any, future::Future};
 pub use style::*;
 pub use styled::*;
 pub use subscription::*;
-use svg_renderer::*;
+pub use svg_renderer::*;
 pub(crate) use tab_stop::*;
 pub use taffy::{AvailableSpace, LayoutId};
+pub use transform::*;
 #[cfg(any(test, feature = "test-support"))]
 pub use test::*;
 pub use text_system::*;
-#[cfg(any(test, feature = "test-support"))]
-pub use util::smol_timeout;
 pub use util::{FutureExt, Timeout, arc_cow::ArcCow};
 pub use view::*;
 pub use window::*;
 
-use std::{any::Any, borrow::BorrowMut, future::Future};
-use taffy::TaffyLayoutEngine;
-
 /// The context trait, allows the different contexts in GPUI to be used
 /// interchangeably for certain operations.
 pub trait AppContext {
-    /// The result type for this context, used for async contexts that
-    /// can't hold a direct reference to the application context.
-    type Result<T>;
-
     /// Create a new entity in the app context.
     #[expect(
         clippy::wrong_self_convention,
         reason = "`App::new` is an ubiquitous function for creating entities"
     )]
-    fn new<T: 'static>(
-        &mut self,
-        build_entity: impl FnOnce(&mut Context<T>) -> T,
-    ) -> Self::Result<Entity<T>>;
+    fn new<T: 'static>(&mut self, build_entity: impl FnOnce(&mut Context<T>) -> T) -> Entity<T>;
 
     /// Reserve a slot for a entity to be inserted later.
     /// The returned [Reservation] allows you to obtain the [EntityId] for the future entity.
-    fn reserve_entity<T: 'static>(&mut self) -> Self::Result<Reservation<T>>;
+    fn reserve_entity<T: 'static>(&mut self) -> Reservation<T>;
 
     /// Insert a new entity in the app context based on a [Reservation] previously obtained from [`reserve_entity`].
     ///
@@ -140,28 +143,24 @@ pub trait AppContext {
         &mut self,
         reservation: Reservation<T>,
         build_entity: impl FnOnce(&mut Context<T>) -> T,
-    ) -> Self::Result<Entity<T>>;
+    ) -> Entity<T>;
 
     /// Update a entity in the app context.
     fn update_entity<T, R>(
         &mut self,
         handle: &Entity<T>,
         update: impl FnOnce(&mut T, &mut Context<T>) -> R,
-    ) -> Self::Result<R>
+    ) -> R
     where
         T: 'static;
 
     /// Update a entity in the app context.
-    fn as_mut<'a, T>(&'a mut self, handle: &Entity<T>) -> Self::Result<GpuiBorrow<'a, T>>
+    fn as_mut<'a, T>(&'a mut self, handle: &Entity<T>) -> GpuiBorrow<'a, T>
     where
         T: 'static;
 
     /// Read a entity from the app context.
-    fn read_entity<T, R>(
-        &self,
-        handle: &Entity<T>,
-        read: impl FnOnce(&T, &App) -> R,
-    ) -> Self::Result<R>
+    fn read_entity<T, R>(&self, handle: &Entity<T>, read: impl FnOnce(&T, &App) -> R) -> R
     where
         T: 'static;
 
@@ -185,7 +184,7 @@ pub trait AppContext {
         R: Send + 'static;
 
     /// Read a global from this app context
-    fn read_global<G, R>(&self, callback: impl FnOnce(&G, &App) -> R) -> Self::Result<R>
+    fn read_global<G, R>(&self, callback: impl FnOnce(&G, &App) -> R) -> R
     where
         G: Global;
 }
@@ -204,6 +203,9 @@ impl<T: 'static> Reservation<T> {
 /// This trait is used for the different visual contexts in GPUI that
 /// require a window to be present.
 pub trait VisualContext: AppContext {
+    /// The result type for window operations.
+    type Result<T>;
+
     /// Returns the handle of the window associated with this context.
     fn window_handle(&self) -> AnyWindowHandle;
 
@@ -255,7 +257,7 @@ pub trait BorrowAppContext {
 
 impl<C> BorrowAppContext for C
 where
-    C: BorrowMut<App>,
+    C: std::borrow::BorrowMut<App>,
 {
     fn set_global<G: Global>(&mut self, global: G) {
         self.borrow_mut().set_global(global)
@@ -278,24 +280,6 @@ where
     {
         self.borrow_mut().default_global::<G>();
         self.update_global(f)
-    }
-}
-
-/// A flatten equivalent for anyhow `Result`s.
-pub trait Flatten<T> {
-    /// Convert this type into a simple `Result<T>`.
-    fn flatten(self) -> Result<T>;
-}
-
-impl<T> Flatten<T> for Result<Result<T>> {
-    fn flatten(self) -> Result<T> {
-        self?
-    }
-}
-
-impl<T> Flatten<T> for Result<T> {
-    fn flatten(self) -> Result<T> {
-        self
     }
 }
 

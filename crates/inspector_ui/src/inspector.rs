@@ -33,6 +33,7 @@ pub fn init(app_state: Arc<AppState>, cx: &mut App) {
         app_state.languages.clone(),
         app_state.fs.clone(),
         None,
+        false,
         cx,
     );
 
@@ -150,7 +151,7 @@ fn render_inspector_id(inspector_id: &InspectorElementId, cx: &App) -> Div {
                 .tooltip(Tooltip::text(
                     "GlobalElementId of the nearest ancestor with an ID",
                 ))
-                .child(inspector_id.path.global_id.to_string()),
+                .child(format!("{:?}", inspector_id.path.global_id)),
         )
 }
 

@@ -2,6 +2,8 @@ use crate::HeadlessProject;
 use crate::headless_project::HeadlessAppState;
 use anyhow::{Context as _, Result, anyhow};
 use client::ProxySettings;
+use collections::HashMap;
+use project::trusted_worktrees;
 use util::ResultExt;
 
 use extension::ExtensionHostProxy;
@@ -9,16 +11,17 @@ use fs::{Fs, RealFs};
 use futures::channel::{mpsc, oneshot};
 use futures::{AsyncRead, AsyncWrite, AsyncWriteExt, FutureExt, SinkExt, select, select_biased};
 use git::GitHostingProviderRegistry;
-use gpui::{App, AppContext as _, Context, Entity, SemanticVersion, UpdateGlobal as _};
+use gpui::{App, AppContext as _, Context, Entity, UpdateGlobal as _};
 use gpui_tokio::Tokio;
 use http_client::{Url, read_proxy_from_env};
 use language::LanguageRegistry;
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
 use paths::logs_dir;
 use project::project_settings::ProjectSettings;
+use util::command::new_smol_command;
 
 use proto::CrashReport;
-use release_channel::{AppVersion, RELEASE_CHANNEL, ReleaseChannel};
+use release_channel::{AppCommitSha, AppVersion, RELEASE_CHANNEL, ReleaseChannel};
 use remote::RemoteClient;
 use remote::{
     json_log::LogRecord,
@@ -29,7 +32,7 @@ use reqwest_client::ReqwestClient;
 use rpc::proto::{self, Envelope, REMOTE_SERVER_PROJECT_ID};
 use rpc::{AnyProtoClient, TypedEnvelope};
 use settings::{Settings, SettingsStore, watch_config_file};
-use smol::Async;
+
 use smol::channel::{Receiver, Sender};
 use smol::io::AsyncReadExt;
 use smol::{net::unix::UnixListener, stream::StreamExt as _};
@@ -47,10 +50,16 @@ use std::{
 };
 use thiserror::Error;
 
-pub static VERSION: LazyLock<&str> = LazyLock::new(|| match *RELEASE_CHANNEL {
-    ReleaseChannel::Stable | ReleaseChannel::Preview => env!("ZED_PKG_VERSION"),
+pub static VERSION: LazyLock<String> = LazyLock::new(|| match *RELEASE_CHANNEL {
+    ReleaseChannel::Stable | ReleaseChannel::Preview => env!("ZED_PKG_VERSION").to_owned(),
     ReleaseChannel::Nightly | ReleaseChannel::Dev => {
-        option_env!("ZED_COMMIT_SHA").unwrap_or("missing-zed-commit-sha")
+        let commit_sha = option_env!("ZED_COMMIT_SHA").unwrap_or("missing-zed-commit-sha");
+        let build_identifier = option_env!("ZED_BUILD_ID");
+        if let Some(build_id) = build_identifier {
+            format!("{build_id}+{commit_sha}")
+        } else {
+            commit_sha.to_owned()
+        }
     }
 });
 
@@ -58,7 +67,8 @@ fn init_logging_proxy() {
     env_logger::builder()
         .format(|buf, record| {
             let mut log_record = LogRecord::new(record);
-            log_record.message = format!("(remote proxy) {}", log_record.message);
+            log_record.message =
+                std::borrow::Cow::Owned(format!("(remote proxy) {}", log_record.message));
             serde_json::to_writer(&mut *buf, &log_record)?;
             buf.write_all(b"\n")?;
             Ok(())
@@ -66,7 +76,7 @@ fn init_logging_proxy() {
         .init();
 }
 
-fn init_logging_server(log_file_path: PathBuf) -> Result<Receiver<Vec<u8>>> {
+fn init_logging_server(log_file_path: &Path) -> Result<Receiver<Vec<u8>>> {
     struct MultiWrite {
         file: File,
         channel: Sender<Vec<u8>>,
@@ -92,7 +102,7 @@ fn init_logging_server(log_file_path: PathBuf) -> Result<Receiver<Vec<u8>>> {
     let log_file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&log_file_path)
+        .open(log_file_path)
         .context("Failed to open log file in append mode")?;
 
     let (tx, rx) = smol::channel::unbounded();
@@ -103,11 +113,30 @@ fn init_logging_server(log_file_path: PathBuf) -> Result<Receiver<Vec<u8>>> {
         buffer: Vec::new(),
     });
 
-    env_logger::Builder::from_default_env()
+    let old_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let backtrace = std::backtrace::Backtrace::force_capture();
+        let message = info.payload_as_str().unwrap_or("Box<Any>").to_owned();
+        let location = info
+            .location()
+            .map_or_else(|| "<unknown>".to_owned(), |location| location.to_string());
+        let current_thread = std::thread::current();
+        let thread_name = current_thread.name().unwrap_or("<unnamed>");
+
+        let msg = format!("thread '{thread_name}' panicked at {location}:\n{message}\n{backtrace}");
+        // NOTE: This log never reaches the client, as the communication is handled on a main thread task
+        // which will never run once we panic.
+        log::error!("{msg}");
+        old_hook(info);
+    }));
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
         .target(env_logger::Target::Pipe(target))
         .format(|buf, record| {
             let mut log_record = LogRecord::new(record);
-            log_record.message = format!("(remote server) {}", log_record.message);
+            log_record.message =
+                std::borrow::Cow::Owned(format!("(remote server) {}", log_record.message));
             serde_json::to_writer(&mut *buf, &log_record)?;
             buf.write_all(b"\n")?;
             Ok(())
@@ -190,9 +219,10 @@ fn start_server(
     listeners: ServerListeners,
     log_rx: Receiver<Vec<u8>>,
     cx: &mut App,
+    is_wsl_interop: bool,
 ) -> AnyProtoClient {
     // This is the server idle timeout. If no connection comes in this timeout, the server will shut down.
-    const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+    const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
 
     let (incoming_tx, incoming_rx) = mpsc::unbounded::<Envelope>();
     let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded::<Envelope>();
@@ -219,21 +249,24 @@ fn start_server(
             let result = select! {
                 streams = streams.fuse() => {
                     let (Some(Ok(stdin_stream)), Some(Ok(stdout_stream)), Some(Ok(stderr_stream))) = streams else {
+                        log::error!("failed to accept new connections");
                         break;
                     };
+                    log::info!("accepted new connections");
                     anyhow::Ok((stdin_stream, stdout_stream, stderr_stream))
                 }
-                _ = futures::FutureExt::fuse(smol::Timer::after(IDLE_TIMEOUT)) => {
+                _ = futures::FutureExt::fuse(cx.background_executor().timer(IDLE_TIMEOUT)) => {
                     log::warn!("timed out waiting for new connections after {:?}. exiting.", IDLE_TIMEOUT);
                     cx.update(|cx| {
                         // TODO: This is a hack, because in a headless project, shutdown isn't executed
                         // when calling quit, but it should be.
                         cx.shutdown();
                         cx.quit();
-                    })?;
+                    });
                     break;
                 }
                 _ = app_quit_rx.next().fuse() => {
+                    log::info!("app quit requested");
                     break;
                 }
             };
@@ -263,7 +296,7 @@ fn start_server(
 
                     stdin_message = stdin_msg_rx.next().fuse() => {
                         let Some(message) = stdin_message else {
-                            log::warn!("error reading message on stdin. exiting.");
+                            log::warn!("error reading message on stdin, dropping connection.");
                             break;
                         };
                         if let Err(error) = incoming_tx.unbounded_send(message) {
@@ -309,7 +342,7 @@ fn start_server(
     })
     .detach();
 
-    RemoteClient::proto_client_from_channels(incoming_rx, outgoing_tx, cx, "server")
+    RemoteClient::proto_client_from_channels(incoming_rx, outgoing_tx, cx, "server", is_wsl_interop)
 }
 
 fn init_paths() -> anyhow::Result<()> {
@@ -319,6 +352,7 @@ fn init_paths() -> anyhow::Result<()> {
         paths::languages_dir(),
         paths::logs_dir(),
         paths::temp_dir(),
+        paths::hang_traces_dir(),
         paths::remote_extensions_dir(),
         paths::remote_extensions_uploads_dir(),
     ]
@@ -344,7 +378,8 @@ pub fn execute_run(
     }
 
     let app = gpui::Application::headless();
-    let id = std::process::id().to_string();
+    let pid = std::process::id();
+    let id = pid.to_string();
     app.background_executor()
         .spawn(crashes::init(crashes::InitCrashHandler {
             session_id: id,
@@ -354,19 +389,28 @@ pub fn execute_run(
             commit_sha: option_env!("ZED_COMMIT_SHA").unwrap_or("no_sha").to_owned(),
         }))
         .detach();
-    let log_rx = init_logging_server(log_file)?;
+    let log_rx = init_logging_server(&log_file)?;
     log::info!(
-        "starting up. pid_file: {:?}, stdin_socket: {:?}, stdout_socket: {:?}, stderr_socket: {:?}",
+        "starting up with PID {}:\npid_file: {:?}, log_file: {:?}, stdin_socket: {:?}, stdout_socket: {:?}, stderr_socket: {:?}",
+        pid,
         pid_file,
+        log_file,
         stdin_socket,
         stdout_socket,
         stderr_socket
     );
 
-    write_pid_file(&pid_file)
+    write_pid_file(&pid_file, pid)
         .with_context(|| format!("failed to write pid file: {:?}", &pid_file))?;
 
     let listeners = ServerListeners::new(stdin_socket, stdout_socket, stderr_socket)?;
+
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(std::thread::available_parallelism().map_or(1, |n| n.get().div_ceil(2)))
+        .stack_size(10 * 1024 * 1024)
+        .thread_name(|ix| format!("RayonWorker{}", ix))
+        .build_global()
+        .unwrap();
 
     let (shell_env_loaded_tx, shell_env_loaded_rx) = oneshot::channel();
     app.background_executor()
@@ -377,18 +421,29 @@ pub fn execute_run(
         .detach();
 
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
-    app.run(move |cx| {
+    let run = move |cx: &mut _| {
         settings::init(cx);
-        let app_version = AppVersion::load(env!("ZED_PKG_VERSION"));
+        let app_commit_sha = option_env!("ZED_COMMIT_SHA").map(|s| AppCommitSha::new(s.to_owned()));
+        let app_version = AppVersion::load(
+            env!("ZED_PKG_VERSION"),
+            option_env!("ZED_BUILD_ID"),
+            app_commit_sha,
+        );
         release_channel::init(app_version, cx);
         gpui_tokio::init(cx);
 
         HeadlessProject::init(cx);
 
-        log::info!("gpui app started, initializing server");
-        let session = start_server(listeners, log_rx, cx);
+        let is_wsl_interop = if cfg!(target_os = "linux") {
+            // See: https://learn.microsoft.com/en-us/windows/wsl/filesystems#disable-interoperability
+            matches!(std::fs::read_to_string("/proc/sys/fs/binfmt_misc/WSLInterop"), Ok(s) if s.contains("enabled"))
+        } else {
+            false
+        };
 
-        client::init_settings(cx);
+        log::info!("gpui app started, initializing server");
+        let session = start_server(listeners, log_rx, cx, is_wsl_interop);
+        trusted_worktrees::init(HashMap::default(), cx);
 
         GitHostingProviderRegistry::set_global(git_hosting_provider_registry, cx);
         git_hosting_providers::init(cx);
@@ -440,6 +495,7 @@ pub fn execute_run(
                     languages,
                     extension_host_proxy,
                 },
+                true,
                 cx,
             )
         });
@@ -450,13 +506,22 @@ pub fn execute_run(
             .detach();
 
         mem::forget(project);
-    });
-    log::info!("gpui app is shut down. quitting.");
-    Ok(())
+    };
+    // We do not reuse any of the state after unwinding, so we don't run risk of observing broken invariants.
+    let app = std::panic::AssertUnwindSafe(app);
+    let run = std::panic::AssertUnwindSafe(run);
+    let res = std::panic::catch_unwind(move || { app }.0.run({ run }.0));
+    if let Err(_) = res {
+        log::error!("app panicked. quitting.");
+        Err(anyhow::anyhow!("panicked"))
+    } else {
+        log::info!("gpui app is shut down. quitting.");
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum ServerPathError {
+pub enum ServerPathError {
     #[error("Failed to create server_dir `{path}`")]
     CreateServerDir {
         #[source]
@@ -491,7 +556,7 @@ impl ServerPaths {
         })?;
         let log_dir = logs_dir();
         std::fs::create_dir_all(log_dir).map_err(|source| ServerPathError::CreateLogsDir {
-            source: source,
+            source,
             path: log_dir.clone(),
         })?;
 
@@ -512,36 +577,47 @@ impl ServerPaths {
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum ExecuteProxyError {
-    #[error("Failed to init server paths")]
+pub enum ExecuteProxyError {
+    #[error("Failed to init server paths: {0:#}")]
     ServerPath(#[from] ServerPathError),
 
     #[error(transparent)]
     ServerNotRunning(#[from] ProxyLaunchError),
 
-    #[error("Failed to check PidFile '{path}'")]
+    #[error("Failed to check PidFile '{path}': {source:#}")]
     CheckPidFile {
         #[source]
         source: CheckPidError,
         path: PathBuf,
     },
 
-    #[error("Failed to kill existing server with pid '{pid}'")]
+    #[error("Failed to kill existing server with pid '{pid}': {source:#}")]
     KillRunningServer {
         #[source]
         source: std::io::Error,
         pid: u32,
     },
 
-    #[error("failed to spawn server")]
+    #[error("failed to spawn server: {0:#}")]
     SpawnServer(#[source] SpawnServerError),
 
-    #[error("stdin_task failed")]
+    #[error("stdin_task failed: {0:#}")]
     StdinTask(#[source] anyhow::Error),
-    #[error("stdout_task failed")]
+    #[error("stdout_task failed: {0:#}")]
     StdoutTask(#[source] anyhow::Error),
-    #[error("stderr_task failed")]
+    #[error("stderr_task failed: {0:#}")]
     StderrTask(#[source] anyhow::Error),
+}
+
+impl ExecuteProxyError {
+    pub fn to_exit_code(&self) -> i32 {
+        match self {
+            ExecuteProxyError::ServerNotRunning(proxy_launch_error) => {
+                proxy_launch_error.to_exit_code()
+            }
+            _ => 1,
+        }
+    }
 }
 
 pub(crate) fn execute_proxy(
@@ -563,20 +639,22 @@ pub(crate) fn execute_proxy(
     .detach();
 
     log::info!("starting proxy process. PID: {}", std::process::id());
-    smol::block_on(async {
+    let server_pid = smol::block_on(async {
         let server_pid = check_pid_file(&server_paths.pid_file)
             .await
             .map_err(|source| ExecuteProxyError::CheckPidFile {
                 source,
                 path: server_paths.pid_file.clone(),
             })?;
-        let server_running = server_pid.is_some();
         if is_reconnecting {
-            if !server_running {
-                log::error!("attempted to reconnect, but no server running");
-                return Err(ExecuteProxyError::ServerNotRunning(
-                    ProxyLaunchError::ServerNotRunning,
-                ));
+            match server_pid {
+                None => {
+                    log::error!("attempted to reconnect, but no server running");
+                    Err(ExecuteProxyError::ServerNotRunning(
+                        ProxyLaunchError::ServerNotRunning,
+                    ))
+                }
+                Some(server_pid) => Ok(server_pid),
             }
         } else {
             if let Some(pid) = server_pid {
@@ -586,29 +664,59 @@ pub(crate) fn execute_proxy(
                 );
                 kill_running_server(pid, &server_paths).await?;
             }
-
             spawn_server(&server_paths)
                 .await
                 .map_err(ExecuteProxyError::SpawnServer)?;
-        };
-        Ok(())
+            std::fs::read_to_string(&server_paths.pid_file)
+                .and_then(|contents| {
+                    contents.parse::<u32>().map_err(|_| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "Invalid PID file contents",
+                        )
+                    })
+                })
+                .map_err(SpawnServerError::ProcessStatus)
+                .map_err(ExecuteProxyError::SpawnServer)
+        }
     })?;
 
     let stdin_task = smol::spawn(async move {
-        let stdin = Async::new(std::io::stdin())?;
-        let stream = smol::net::unix::UnixStream::connect(&server_paths.stdin_socket).await?;
+        let stdin = smol::Unblock::new(std::io::stdin());
+        let stream = smol::net::unix::UnixStream::connect(&server_paths.stdin_socket)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to connect to stdin socket {}",
+                    server_paths.stdin_socket.display()
+                )
+            })?;
         handle_io(stdin, stream, "stdin").await
     });
 
     let stdout_task: smol::Task<Result<()>> = smol::spawn(async move {
-        let stdout = Async::new(std::io::stdout())?;
-        let stream = smol::net::unix::UnixStream::connect(&server_paths.stdout_socket).await?;
+        let stdout = smol::Unblock::new(std::io::stdout());
+        let stream = smol::net::unix::UnixStream::connect(&server_paths.stdout_socket)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to connect to stdout socket {}",
+                    server_paths.stdout_socket.display()
+                )
+            })?;
         handle_io(stream, stdout, "stdout").await
     });
 
     let stderr_task: smol::Task<Result<()>> = smol::spawn(async move {
-        let mut stderr = Async::new(std::io::stderr())?;
-        let mut stream = smol::net::unix::UnixStream::connect(&server_paths.stderr_socket).await?;
+        let mut stderr = smol::Unblock::new(std::io::stderr());
+        let mut stream = smol::net::unix::UnixStream::connect(&server_paths.stderr_socket)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to connect to stderr socket {}",
+                    server_paths.stderr_socket.display()
+                )
+            })?;
         let mut stderr_buffer = vec![0; 2048];
         loop {
             match stream
@@ -636,10 +744,13 @@ pub(crate) fn execute_proxy(
             result = stderr_task.fuse() => result.map_err(ExecuteProxyError::StderrTask),
         }
     }) {
-        log::error!(
-            "encountered error while forwarding messages: {:?}, terminating...",
-            forwarding_result
-        );
+        log::error!("encountered error while forwarding messages: {forwarding_result:#}",);
+        if !matches!(smol::block_on(check_server_running(server_pid)), Ok(true)) {
+            log::error!("server exited unexpectedly");
+            return Err(ExecuteProxyError::ServerNotRunning(
+                ProxyLaunchError::ServerNotRunning,
+            ));
+        }
         return Err(forwarding_result);
     }
 
@@ -648,7 +759,7 @@ pub(crate) fn execute_proxy(
 
 async fn kill_running_server(pid: u32, paths: &ServerPaths) -> Result<(), ExecuteProxyError> {
     log::info!("killing existing server with PID {}", pid);
-    smol::process::Command::new("kill")
+    new_smol_command("kill")
         .arg(pid.to_string())
         .output()
         .await
@@ -667,7 +778,7 @@ async fn kill_running_server(pid: u32, paths: &ServerPaths) -> Result<(), Execut
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum SpawnServerError {
+pub enum SpawnServerError {
     #[error("failed to remove stdin socket")]
     RemoveStdinSocket(#[source] std::io::Error),
 
@@ -685,9 +796,13 @@ pub(crate) enum SpawnServerError {
 
     #[error("failed to launch and detach server process: {status}\n{paths}")]
     LaunchStatus { status: ExitStatus, paths: String },
+
+    #[error("failed to wait for server to be ready to accept connections")]
+    Timeout,
 }
 
 async fn spawn_server(paths: &ServerPaths) -> Result<(), SpawnServerError> {
+    log::info!("spawning server process",);
     if paths.stdin_socket.exists() {
         std::fs::remove_file(&paths.stdin_socket).map_err(SpawnServerError::RemoveStdinSocket)?;
     }
@@ -699,7 +814,7 @@ async fn spawn_server(paths: &ServerPaths) -> Result<(), SpawnServerError> {
     }
 
     let binary_name = std::env::current_exe().map_err(SpawnServerError::CurrentExe)?;
-    let mut server_process = smol::process::Command::new(binary_name);
+    let mut server_process = new_smol_command(binary_name);
     server_process
         .arg("run")
         .arg("--log-file")
@@ -737,6 +852,9 @@ async fn spawn_server(paths: &ServerPaths) -> Result<(), SpawnServerError> {
         log::debug!("waiting for server to be ready to accept connections...");
         std::thread::sleep(wait_duration);
         total_time_waited += wait_duration;
+        if total_time_waited > std::time::Duration::from_secs(10) {
+            return Err(SpawnServerError::Timeout);
+        }
     }
 
     log::info!(
@@ -749,10 +867,18 @@ async fn spawn_server(paths: &ServerPaths) -> Result<(), SpawnServerError> {
 
 #[derive(Debug, Error)]
 #[error("Failed to remove PID file for missing process (pid `{pid}`")]
-pub(crate) struct CheckPidError {
+pub struct CheckPidError {
     #[source]
     source: std::io::Error,
     pid: u32,
+}
+async fn check_server_running(pid: u32) -> std::io::Result<bool> {
+    new_smol_command("kill")
+        .arg("-0")
+        .arg(pid.to_string())
+        .output()
+        .await
+        .map(|output| output.status.success())
 }
 
 async fn check_pid_file(path: &Path) -> Result<Option<u32>, CheckPidError> {
@@ -764,13 +890,8 @@ async fn check_pid_file(path: &Path) -> Result<Option<u32>, CheckPidError> {
     };
 
     log::debug!("Checking if process with PID {} exists...", pid);
-    match smol::process::Command::new("kill")
-        .arg("-0")
-        .arg(pid.to_string())
-        .output()
-        .await
-    {
-        Ok(output) if output.status.success() => {
+    match check_server_running(pid).await {
+        Ok(true) => {
             log::debug!(
                 "Process with PID {} exists. NOT spawning new server, but attaching to existing one.",
                 pid
@@ -787,13 +908,12 @@ async fn check_pid_file(path: &Path) -> Result<Option<u32>, CheckPidError> {
     }
 }
 
-fn write_pid_file(path: &Path) -> Result<()> {
+fn write_pid_file(path: &Path, pid: u32) -> Result<()> {
     if path.exists() {
         std::fs::remove_file(path)?;
     }
-    let pid = std::process::id().to_string();
     log::debug!("writing PID {} to file {:?}", pid, path);
-    std::fs::write(path, pid).context("Failed to write PID file")
+    std::fs::write(path, pid.to_string()).context("Failed to write PID file")
 }
 
 async fn handle_io<R, W>(mut reader: R, mut writer: W, socket_name: &str) -> Result<()>
@@ -891,8 +1011,8 @@ pub fn handle_settings_file_changes(
     settings_changed: impl Fn(Option<anyhow::Error>, &mut App) + 'static,
 ) {
     let server_settings_content = cx
-        .background_executor()
-        .block(server_settings_file.next())
+        .foreground_executor()
+        .block_on(server_settings_file.next())
         .unwrap();
     SettingsStore::update_global(cx, |store, cx| {
         store
@@ -901,7 +1021,7 @@ pub fn handle_settings_file_changes(
     });
     cx.spawn(async move |cx| {
         while let Some(server_settings_content) = server_settings_file.next().await {
-            let result = cx.update_global(|store: &mut SettingsStore, cx| {
+            cx.update_global(|store: &mut SettingsStore, cx| {
                 let result = store.set_server_settings(&server_settings_content, cx);
                 if let Err(err) = &result {
                     log::error!("Failed to load server settings: {err}");
@@ -909,9 +1029,6 @@ pub fn handle_settings_file_changes(
                 settings_changed(result.err(), cx);
                 cx.refresh_windows();
             });
-            if result.is_err() {
-                break; // App dropped
-            }
         }
     })
     .detach();
@@ -921,8 +1038,10 @@ fn read_proxy_settings(cx: &mut Context<HeadlessProject>) -> Option<Url> {
     let proxy_str = ProxySettings::get_global(cx).proxy.to_owned();
 
     proxy_str
-        .as_ref()
-        .and_then(|input: &String| {
+        .as_deref()
+        .map(str::trim)
+        .filter(|input| !input.is_empty())
+        .and_then(|input| {
             input
                 .parse::<Url>()
                 .inspect_err(|e| log::error!("Error parsing proxy settings: {}", e))
@@ -993,9 +1112,9 @@ fn cleanup_old_binaries() -> Result<()> {
 }
 
 fn is_new_version(version: &str) -> bool {
-    SemanticVersion::from_str(version)
+    semver::Version::from_str(version)
         .ok()
-        .zip(SemanticVersion::from_str(env!("ZED_PKG_VERSION")).ok())
+        .zip(semver::Version::from_str(env!("ZED_PKG_VERSION")).ok())
         .is_some_and(|(version, current_version)| version >= current_version)
 }
 

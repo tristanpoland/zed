@@ -70,12 +70,6 @@ pub(crate) mod m_2025_05_08 {
     pub(crate) use settings::SETTINGS_PATTERNS;
 }
 
-pub(crate) mod m_2025_05_29 {
-    mod settings;
-
-    pub(crate) use settings::SETTINGS_PATTERNS;
-}
-
 pub(crate) mod m_2025_06_16 {
     mod settings;
 
@@ -103,7 +97,7 @@ pub(crate) mod m_2025_07_08 {
 pub(crate) mod m_2025_10_01 {
     mod settings;
 
-    pub(crate) use settings::SETTINGS_PATTERNS;
+    pub(crate) use settings::flatten_code_actions_formatters;
 }
 
 pub(crate) mod m_2025_10_02 {
@@ -118,8 +112,56 @@ pub(crate) mod m_2025_10_03 {
     pub(crate) use settings::SETTINGS_PATTERNS;
 }
 
-pub(crate) mod m_2025_10_10 {
+pub(crate) mod m_2025_10_16 {
     mod settings;
 
-    pub(crate) use settings::remove_code_actions_on_format;
+    pub(crate) use settings::restore_code_actions_on_format;
+}
+
+pub(crate) mod m_2025_10_17 {
+    mod settings;
+
+    pub(crate) use settings::make_file_finder_include_ignored_an_enum;
+}
+
+pub(crate) mod m_2025_10_21 {
+    mod settings;
+
+    pub(crate) use settings::make_relative_line_numbers_an_enum;
+}
+
+pub(crate) mod m_2025_11_12 {
+    mod settings;
+
+    pub(crate) use settings::SETTINGS_PATTERNS;
+}
+
+pub(crate) mod m_2025_11_20 {
+    mod settings;
+
+    pub(crate) use settings::SETTINGS_PATTERNS;
+}
+
+pub(crate) mod m_2025_11_25 {
+    mod settings;
+
+    pub(crate) use settings::remove_context_server_source;
+}
+
+pub(crate) mod m_2025_12_01 {
+    mod settings;
+
+    pub(crate) use settings::SETTINGS_PATTERNS;
+}
+
+pub(crate) mod m_2025_12_08 {
+    mod keymap;
+
+    pub(crate) use keymap::KEYMAP_PATTERNS;
+}
+
+pub(crate) mod m_2025_12_15 {
+    mod settings;
+
+    pub(crate) use settings::SETTINGS_PATTERNS;
 }
