@@ -38,7 +38,7 @@ pub enum Commands {
 pub fn run(command: Commands) -> anyhow::Result<()> {
     use anyhow::Context;
     use release_channel::{RELEASE_CHANNEL, ReleaseChannel};
-    use unix::{ExecuteProxyError, execute_proxy, execute_run};
+    use unix::{execute_proxy, execute_run};
 
     match command {
         Commands::Run {
@@ -57,13 +57,7 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
         Commands::Proxy {
             identifier,
             reconnect,
-        } => execute_proxy(identifier, reconnect)
-            .inspect_err(|err| {
-                if let ExecuteProxyError::ServerNotRunning(err) = err {
-                    std::process::exit(err.to_exit_code());
-                }
-            })
-            .context("running proxy on the remote server"),
+        } => execute_proxy(identifier, reconnect).context("running proxy on the remote server"),
         Commands::Version => {
             let release_channel = *RELEASE_CHANNEL;
             match release_channel {
@@ -71,10 +65,14 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
                     println!("{}", env!("ZED_PKG_VERSION"))
                 }
                 ReleaseChannel::Nightly | ReleaseChannel::Dev => {
-                    println!(
-                        "{}",
-                        option_env!("ZED_COMMIT_SHA").unwrap_or(release_channel.dev_name())
-                    )
+                    let commit_sha =
+                        option_env!("ZED_COMMIT_SHA").unwrap_or(release_channel.dev_name());
+                    let build_id = option_env!("ZED_BUILD_ID");
+                    if let Some(build_id) = build_id {
+                        println!("{}+{}", build_id, commit_sha)
+                    } else {
+                        println!("{commit_sha}");
+                    }
                 }
             };
             Ok(())

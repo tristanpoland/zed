@@ -5,12 +5,13 @@ use crate::platform::blade::{BladeContext, BladeRenderer, BladeSurfaceConfig};
 use crate::{
     AnyWindowHandle, Bounds, Decorations, DevicePixels, ForegroundExecutor, GpuSpecs, Modifiers,
     Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow,
-    Point, PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, ScaledPixels, Scene, Size,
-    Tiling, WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea,
-    WindowDecorations, WindowKind, WindowParams, X11ClientStatePtr, px, size,
+    Point, PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, ScaledPixels, Scene,
+    SceneSegmentPool, Size, Tiling, WindowAppearance, WindowBackgroundAppearance, WindowBounds,
+    WindowControlArea, WindowDecorations, WindowKind, WindowParams, X11ClientStatePtr, px, size,
 };
 
 use blade_graphics as gpu;
+use collections::FxHashSet;
 use raw_window_handle as rwh;
 use util::{ResultExt, maybe};
 use x11rb::{
@@ -74,6 +75,7 @@ x11rb::atom_manager! {
         _NET_WM_WINDOW_TYPE,
         _NET_WM_WINDOW_TYPE_NOTIFICATION,
         _NET_WM_WINDOW_TYPE_DIALOG,
+        _NET_WM_STATE_MODAL,
         _NET_WM_SYNC,
         _NET_SUPPORTED,
         _MOTIF_WM_HINTS,
@@ -249,6 +251,8 @@ pub struct Callbacks {
 
 pub struct X11WindowState {
     pub destroyed: bool,
+    parent: Option<X11WindowStatePtr>,
+    children: FxHashSet<xproto::Window>,
     client: X11ClientStatePtr,
     executor: ForegroundExecutor,
     atoms: XcbAtoms,
@@ -397,7 +401,7 @@ impl X11WindowState {
         atoms: &XcbAtoms,
         scale_factor: f32,
         appearance: WindowAppearance,
-        parent_window: Option<xproto::Window>,
+        parent_window: Option<X11WindowStatePtr>,
     ) -> anyhow::Result<Self> {
         let x_screen_index = params
             .display_id
@@ -430,6 +434,7 @@ impl X11WindowState {
             // https://stackoverflow.com/questions/43218127/x11-xlib-xcb-creating-a-window-requires-border-pixel-if-specifying-colormap-wh
             .border_pixel(visual_set.black_pixel)
             .colormap(colormap)
+            .override_redirect((params.kind == WindowKind::PopUp) as u32)
             .event_mask(
                 xproto::EventMask::EXPOSURE
                     | xproto::EventMask::STRUCTURE_NOTIFY
@@ -549,8 +554,8 @@ impl X11WindowState {
                 )?;
             }
 
-            if params.kind == WindowKind::Floating {
-                if let Some(parent_window) = parent_window {
+            if params.kind == WindowKind::Floating || params.kind == WindowKind::Dialog {
+                if let Some(parent_window) = parent_window.as_ref().map(|w| w.x_window) {
                     // WM_TRANSIENT_FOR hint indicating the main application window. For floating windows, we set
                     // a parent window (WM_TRANSIENT_FOR) such that the window manager knows where to
                     // place the floating window in relation to the main window.
@@ -566,17 +571,43 @@ impl X11WindowState {
                         ),
                     )?;
                 }
+            }
 
+            let parent = if params.kind == WindowKind::Dialog
+                && let Some(parent) = parent_window
+            {
+                parent.add_child(x_window);
+
+                Some(parent)
+            } else {
+                None
+            };
+
+            if params.kind == WindowKind::Dialog {
                 // _NET_WM_WINDOW_TYPE_DIALOG indicates that this is a dialog (floating) window
                 // https://specifications.freedesktop.org/wm-spec/1.4/ar01s05.html
                 check_reply(
-                    || "X11 ChangeProperty32 setting window type for floating window failed.",
+                    || "X11 ChangeProperty32 setting window type for dialog window failed.",
                     xcb.change_property32(
                         xproto::PropMode::REPLACE,
                         x_window,
                         atoms._NET_WM_WINDOW_TYPE,
                         xproto::AtomEnum::ATOM,
                         &[atoms._NET_WM_WINDOW_TYPE_DIALOG],
+                    ),
+                )?;
+
+                // We set the modal state for dialog windows, so that the window manager
+                // can handle it appropriately (e.g., prevent interaction with the parent window
+                // while the dialog is open).
+                check_reply(
+                    || "X11 ChangeProperty32 setting modal state for dialog window failed.",
+                    xcb.change_property32(
+                        xproto::PropMode::REPLACE,
+                        x_window,
+                        atoms._NET_WM_STATE,
+                        xproto::AtomEnum::ATOM,
+                        &[atoms._NET_WM_STATE_MODAL],
                     ),
                 )?;
             }
@@ -670,6 +701,8 @@ impl X11WindowState {
             let display = Rc::new(X11Display::new(xcb, scale_factor, x_screen_index)?);
 
             Ok(Self {
+                parent,
+                children: FxHashSet::default(),
                 client,
                 executor,
                 display,
@@ -819,6 +852,11 @@ pub(crate) struct X11Window(pub X11WindowStatePtr);
 impl Drop for X11Window {
     fn drop(&mut self) {
         let mut state = self.0.state.borrow_mut();
+
+        if let Some(parent) = state.parent.as_ref() {
+            parent.state.borrow_mut().children.remove(&self.0.x_window);
+        }
+
         state.renderer.destroy();
 
         let destroy_x_window = maybe!({
@@ -833,8 +871,6 @@ impl Drop for X11Window {
         .log_err();
 
         if destroy_x_window.is_some() {
-            // Mark window as destroyed so that we can filter out when X11 events
-            // for it still come in.
             state.destroyed = true;
 
             let this_ptr = self.0.clone();
@@ -872,7 +908,7 @@ impl X11Window {
         atoms: &XcbAtoms,
         scale_factor: f32,
         appearance: WindowAppearance,
-        parent_window: Option<xproto::Window>,
+        parent_window: Option<X11WindowStatePtr>,
     ) -> anyhow::Result<Self> {
         let ptr = X11WindowStatePtr {
             state: Rc::new(RefCell::new(X11WindowState::new(
@@ -1123,7 +1159,31 @@ impl X11WindowStatePtr {
         Ok(())
     }
 
+    pub fn add_child(&self, child: xproto::Window) {
+        let mut state = self.state.borrow_mut();
+        state.children.insert(child);
+    }
+
+    pub fn is_blocked(&self) -> bool {
+        let state = self.state.borrow();
+        !state.children.is_empty()
+    }
+
     pub fn close(&self) {
+        let state = self.state.borrow();
+        let client = state.client.clone();
+        #[allow(clippy::mutable_key_type)]
+        let children = state.children.clone();
+        drop(state);
+
+        if let Some(client) = client.get_client() {
+            for child in children {
+                if let Some(child_window) = client.get_window(child) {
+                    child_window.close();
+                }
+            }
+        }
+
         let mut callbacks = self.callbacks.borrow_mut();
         if let Some(fun) = callbacks.close.take() {
             fun()
@@ -1138,6 +1198,9 @@ impl X11WindowStatePtr {
     }
 
     pub fn handle_input(&self, input: PlatformInput) {
+        if self.is_blocked() {
+            return;
+        }
         if let Some(ref mut fun) = self.callbacks.borrow_mut().input
             && !fun(input.clone()).propagate
         {
@@ -1160,6 +1223,9 @@ impl X11WindowStatePtr {
     }
 
     pub fn handle_ime_commit(&self, text: String) {
+        if self.is_blocked() {
+            return;
+        }
         let mut state = self.state.borrow_mut();
         if let Some(mut input_handler) = state.input_handler.take() {
             drop(state);
@@ -1170,6 +1236,9 @@ impl X11WindowStatePtr {
     }
 
     pub fn handle_ime_preedit(&self, text: String) {
+        if self.is_blocked() {
+            return;
+        }
         let mut state = self.state.borrow_mut();
         if let Some(mut input_handler) = state.input_handler.take() {
             drop(state);
@@ -1180,6 +1249,9 @@ impl X11WindowStatePtr {
     }
 
     pub fn handle_ime_unmark(&self) {
+        if self.is_blocked() {
+            return;
+        }
         let mut state = self.state.borrow_mut();
         if let Some(mut input_handler) = state.input_handler.take() {
             drop(state);
@@ -1190,6 +1262,9 @@ impl X11WindowStatePtr {
     }
 
     pub fn handle_ime_delete(&self) {
+        if self.is_blocked() {
+            return;
+        }
         let mut state = self.state.borrow_mut();
         if let Some(mut input_handler) = state.input_handler.take() {
             drop(state);
@@ -1528,6 +1603,24 @@ impl PlatformWindow for X11Window {
         state.renderer.update_transparency(transparent);
     }
 
+    fn background_appearance(&self) -> WindowBackgroundAppearance {
+        self.0.state.borrow().background_appearance
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        self.0
+            .state
+            .borrow()
+            .client
+            .0
+            .upgrade()
+            .map(|ref_cell| {
+                let state = ref_cell.borrow();
+                state.gpu_context.supports_dual_source_blending()
+            })
+            .unwrap_or_default()
+    }
+
     fn minimize(&self) {
         let state = self.0.state.borrow();
         const WINDOW_ICONIC_STATE: u32 = 3;
@@ -1614,9 +1707,9 @@ impl PlatformWindow for X11Window {
         self.0.callbacks.borrow_mut().appearance_changed = Some(callback);
     }
 
-    fn draw(&self, scene: &Scene) {
+    fn draw(&self, scene: &Scene, segment_pool: &SceneSegmentPool) {
         let mut inner = self.0.state.borrow_mut();
-        inner.renderer.draw(scene);
+        inner.renderer.draw(scene, segment_pool);
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {

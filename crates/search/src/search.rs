@@ -143,7 +143,7 @@ impl SearchOption {
                 let focus_handle = focus_handle.clone();
                 button.on_click(move |_: &ClickEvent, window, cx| {
                     if !focus_handle.is_focused(window) {
-                        window.focus(&focus_handle);
+                        window.focus(&focus_handle, cx);
                     }
                     window.dispatch_action(action.boxed_clone(), cx);
                 })
@@ -158,9 +158,7 @@ impl SearchOption {
         .style(ButtonStyle::Subtle)
         .shape(IconButtonShape::Square)
         .toggle_state(active.contains(self.as_options()))
-        .tooltip({
-            move |window, cx| Tooltip::for_action_in(label, action, &focus_handle, window, cx)
-        })
+        .tooltip(move |_window, cx| Tooltip::for_action_in(label, action, &focus_handle, cx))
     }
 }
 

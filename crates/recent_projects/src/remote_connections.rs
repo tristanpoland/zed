@@ -1,41 +1,47 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::{Context as _, Result};
 use askpass::EncryptedPassword;
 use auto_update::AutoUpdater;
 use editor::Editor;
 use extension_host::ExtensionStore;
-use futures::channel::oneshot;
+use futures::{FutureExt as _, channel::oneshot, select};
 use gpui::{
     AnyWindowHandle, App, AsyncApp, DismissEvent, Entity, EventEmitter, Focusable, FontFeatures,
-    ParentElement as _, PromptLevel, Render, SemanticVersion, SharedString, Task,
-    TextStyleRefinement, WeakEntity,
+    ParentElement as _, PromptLevel, Render, SharedString, Task, TextStyleRefinement, WeakEntity,
 };
 
-use language::CursorShape;
+use language::{CursorShape, Point};
 use markdown::{Markdown, MarkdownElement, MarkdownStyle};
+use project::trusted_worktrees;
 use release_channel::ReleaseChannel;
 use remote::{
-    ConnectionIdentifier, RemoteClient, RemoteConnectionOptions, RemotePlatform,
-    SshConnectionOptions,
+    ConnectionIdentifier, DockerConnectionOptions, Interactive, RemoteClient, RemoteConnection,
+    RemoteConnectionOptions, RemotePlatform, SshConnectionOptions,
 };
+use semver::Version;
 pub use settings::SshConnection;
-use settings::{ExtendingVec, Settings, WslConnection};
+use settings::{DevContainerConnection, ExtendingVec, RegisterSetting, Settings, WslConnection};
 use theme::ThemeSettings;
 use ui::{
-    ActiveTheme, Color, CommonAnimationExt, Context, Icon, IconName, IconSize, InteractiveElement,
-    IntoElement, Label, LabelCommon, Styled, Window, prelude::*,
+    ActiveTheme, Color, CommonAnimationExt, Context, InteractiveElement, IntoElement, KeyBinding,
+    LabelCommon, ListItem, Styled, Window, prelude::*,
 };
+use util::paths::PathWithPosition;
 use workspace::{AppState, ModalView, Workspace};
 
-pub struct SshSettings {
+#[derive(RegisterSetting)]
+pub struct RemoteSettings {
     pub ssh_connections: ExtendingVec<SshConnection>,
     pub wsl_connections: ExtendingVec<WslConnection>,
     /// Whether to read ~/.ssh/config for ssh connection sources.
     pub read_ssh_config: bool,
 }
 
-impl SshSettings {
+impl RemoteSettings {
     pub fn ssh_connections(&self) -> impl Iterator<Item = SshConnection> + use<> {
         self.ssh_connections.clone().0.into_iter()
     }
@@ -46,7 +52,7 @@ impl SshSettings {
 
     pub fn fill_connection_options_from_settings(&self, options: &mut SshConnectionOptions) {
         for conn in self.ssh_connections() {
-            if conn.host == options.host
+            if conn.host == options.host.to_string()
                 && conn.username == options.username
                 && conn.port == options.port
             {
@@ -66,7 +72,7 @@ impl SshSettings {
         username: Option<String>,
     ) -> SshConnectionOptions {
         let mut options = SshConnectionOptions {
-            host,
+            host: host.into(),
             port,
             username,
             ..Default::default()
@@ -80,6 +86,7 @@ impl SshSettings {
 pub enum Connection {
     Ssh(SshConnection),
     Wsl(WslConnection),
+    DevContainer(DevContainerConnection),
 }
 
 impl From<Connection> for RemoteConnectionOptions {
@@ -87,6 +94,14 @@ impl From<Connection> for RemoteConnectionOptions {
         match val {
             Connection::Ssh(conn) => RemoteConnectionOptions::Ssh(conn.into()),
             Connection::Wsl(conn) => RemoteConnectionOptions::Wsl(conn.into()),
+            Connection::DevContainer(conn) => {
+                RemoteConnectionOptions::Docker(DockerConnectionOptions {
+                    name: conn.name,
+                    container_id: conn.container_id,
+                    upload_binary_over_docker_exec: false,
+                    use_podman: conn.use_podman,
+                })
+            }
         }
     }
 }
@@ -103,7 +118,7 @@ impl From<WslConnection> for Connection {
     }
 }
 
-impl Settings for SshSettings {
+impl Settings for RemoteSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let remote = &content.remote;
         Self {
@@ -118,6 +133,7 @@ pub struct RemoteConnectionPrompt {
     connection_string: SharedString,
     nickname: Option<SharedString>,
     is_wsl: bool,
+    is_devcontainer: bool,
     status_message: Option<SharedString>,
     prompt: Option<(Entity<Markdown>, oneshot::Sender<EncryptedPassword>)>,
     cancellation: Option<oneshot::Sender<()>>,
@@ -127,13 +143,14 @@ pub struct RemoteConnectionPrompt {
 impl Drop for RemoteConnectionPrompt {
     fn drop(&mut self) {
         if let Some(cancel) = self.cancellation.take() {
+            log::debug!("cancelling remote connection");
             cancel.send(()).ok();
         }
     }
 }
 
 pub struct RemoteConnectionModal {
-    pub(crate) prompt: Entity<RemoteConnectionPrompt>,
+    pub prompt: Entity<RemoteConnectionPrompt>,
     paths: Vec<PathBuf>,
     finished: bool,
 }
@@ -143,6 +160,7 @@ impl RemoteConnectionPrompt {
         connection_string: String,
         nickname: Option<String>,
         is_wsl: bool,
+        is_devcontainer: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -150,6 +168,7 @@ impl RemoteConnectionPrompt {
             connection_string: connection_string.into(),
             nickname: nickname.map(|nickname| nickname.into()),
             is_wsl,
+            is_devcontainer,
             editor: cx.new(|cx| Editor::single_line(window, cx)),
             status_message: None,
             cancellation: None,
@@ -192,7 +211,7 @@ impl RemoteConnectionPrompt {
         let markdown = cx.new(|cx| Markdown::new_text(prompt.into(), cx));
         self.prompt = Some((markdown, tx));
         self.status_message.take();
-        window.focus(&self.editor.focus_handle(cx));
+        window.focus(&self.editor.focus_handle(cx), cx);
         cx.notify();
     }
 
@@ -239,17 +258,16 @@ impl Render for RemoteConnectionPrompt {
 
         v_flex()
             .key_context("PasswordPrompt")
-            .py_2()
-            .px_3()
+            .p_2()
             .size_full()
             .text_buffer(cx)
             .when_some(self.status_message.clone(), |el, status_message| {
                 el.child(
                     h_flex()
-                        .gap_1()
+                        .gap_2()
                         .child(
                             Icon::new(IconName::ArrowCircle)
-                                .size(IconSize::Medium)
+                                .color(Color::Muted)
                                 .with_rotate_animation(2),
                         )
                         .child(
@@ -276,21 +294,38 @@ impl Render for RemoteConnectionPrompt {
 }
 
 impl RemoteConnectionModal {
-    pub(crate) fn new(
+    pub fn new(
         connection_options: &RemoteConnectionOptions,
         paths: Vec<PathBuf>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let (connection_string, nickname, is_wsl) = match connection_options {
-            RemoteConnectionOptions::Ssh(options) => {
-                (options.connection_string(), options.nickname.clone(), false)
+        let (connection_string, nickname, is_wsl, is_devcontainer) = match connection_options {
+            RemoteConnectionOptions::Ssh(options) => (
+                options.connection_string(),
+                options.nickname.clone(),
+                false,
+                false,
+            ),
+            RemoteConnectionOptions::Wsl(options) => {
+                (options.distro_name.clone(), None, true, false)
             }
-            RemoteConnectionOptions::Wsl(options) => (options.distro_name.clone(), None, true),
+            RemoteConnectionOptions::Docker(options) => (options.name.clone(), None, false, true),
+            #[cfg(any(test, feature = "test-support"))]
+            RemoteConnectionOptions::Mock(options) => {
+                (format!("mock-{}", options.id), None, false, false)
+            }
         };
         Self {
             prompt: cx.new(|cx| {
-                RemoteConnectionPrompt::new(connection_string, nickname, is_wsl, window, cx)
+                RemoteConnectionPrompt::new(
+                    connection_string,
+                    nickname,
+                    is_wsl,
+                    is_devcontainer,
+                    window,
+                    cx,
+                )
             }),
             finished: false,
             paths,
@@ -312,6 +347,7 @@ impl RemoteConnectionModal {
             .prompt
             .update(cx, |prompt, _cx| prompt.cancellation.take())
         {
+            log::debug!("cancelling remote connection");
             tx.send(()).ok();
         }
         self.finished(cx);
@@ -323,6 +359,7 @@ pub(crate) struct SshConnectionHeader {
     pub(crate) paths: Vec<PathBuf>,
     pub(crate) nickname: Option<SharedString>,
     pub(crate) is_wsl: bool,
+    pub(crate) is_devcontainer: bool,
 }
 
 impl RenderOnce for SshConnectionHeader {
@@ -338,9 +375,12 @@ impl RenderOnce for SshConnectionHeader {
             (self.connection_string, None)
         };
 
-        let icon = match self.is_wsl {
-            true => IconName::Linux,
-            false => IconName::Server,
+        let icon = if self.is_wsl {
+            IconName::Linux
+        } else if self.is_devcontainer {
+            IconName::Box
+        } else {
+            IconName::Server
         };
 
         h_flex()
@@ -383,6 +423,7 @@ impl Render for RemoteConnectionModal {
         let nickname = self.prompt.read(cx).nickname.clone();
         let connection_string = self.prompt.read(cx).connection_string.clone();
         let is_wsl = self.prompt.read(cx).is_wsl;
+        let is_devcontainer = self.prompt.read(cx).is_devcontainer;
 
         let theme = cx.theme().clone();
         let body_color = theme.colors().editor_background;
@@ -402,17 +443,33 @@ impl Render for RemoteConnectionModal {
                     connection_string,
                     nickname,
                     is_wsl,
+                    is_devcontainer,
                 }
                 .render(window, cx),
             )
             .child(
                 div()
                     .w_full()
-                    .rounded_b_lg()
                     .bg(body_color)
-                    .border_t_1()
+                    .border_y_1()
                     .border_color(theme.colors().border_variant)
                     .child(self.prompt.clone()),
+            )
+            .child(
+                div().w_full().py_1().child(
+                    ListItem::new("li-devcontainer-go-back")
+                        .inset(true)
+                        .spacing(ui::ListItemSpacing::Sparse)
+                        .start_slot(Icon::new(IconName::Close).color(Color::Muted))
+                        .child(Label::new("Cancel"))
+                        .end_slot(
+                            KeyBinding::for_action_in(&menu::Cancel, &self.focus_handle(cx), cx)
+                                .size(rems_from_px(12.)),
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.dismiss(&menu::Cancel, window, cx);
+                        })),
+                ),
             )
     }
 }
@@ -475,15 +532,17 @@ impl remote::RemoteClientDelegate for RemoteClientDelegate {
         &self,
         platform: RemotePlatform,
         release_channel: ReleaseChannel,
-        version: Option<SemanticVersion>,
+        version: Option<Version>,
         cx: &mut AsyncApp,
     ) -> Task<anyhow::Result<PathBuf>> {
+        let this = self.clone();
         cx.spawn(async move |cx| {
-            let binary_path = AutoUpdater::download_remote_server_release(
-                platform.os,
-                platform.arch,
+            AutoUpdater::download_remote_server_release(
                 release_channel,
-                version,
+                version.clone(),
+                platform.os.as_str(),
+                platform.arch.as_str(),
+                move |status, cx| this.set_status(Some(status), cx),
                 cx,
             )
             .await
@@ -491,29 +550,29 @@ impl remote::RemoteClientDelegate for RemoteClientDelegate {
                 format!(
                     "Downloading remote server binary (version: {}, os: {}, arch: {})",
                     version
+                        .as_ref()
                         .map(|v| format!("{}", v))
                         .unwrap_or("unknown".to_string()),
                     platform.os,
                     platform.arch,
                 )
-            })?;
-            Ok(binary_path)
+            })
         })
     }
 
-    fn get_download_params(
+    fn get_download_url(
         &self,
         platform: RemotePlatform,
         release_channel: ReleaseChannel,
-        version: Option<SemanticVersion>,
+        version: Option<Version>,
         cx: &mut AsyncApp,
-    ) -> Task<Result<Option<(String, String)>>> {
+    ) -> Task<Result<Option<String>>> {
         cx.spawn(async move |cx| {
             AutoUpdater::get_remote_server_release_url(
-                platform.os,
-                platform.arch,
                 release_channel,
                 version,
+                platform.os.as_str(),
+                platform.arch.as_str(),
                 cx,
             )
             .await
@@ -523,42 +582,14 @@ impl remote::RemoteClientDelegate for RemoteClientDelegate {
 
 impl RemoteClientDelegate {
     fn update_status(&self, status: Option<&str>, cx: &mut AsyncApp) {
-        self.window
-            .update(cx, |_, _, cx| {
-                self.ui.update(cx, |modal, cx| {
+        cx.update(|cx| {
+            self.ui
+                .update(cx, |modal, cx| {
                     modal.set_status(status.map(|s| s.to_string()), cx);
                 })
-            })
-            .ok();
+                .ok()
+        });
     }
-}
-
-pub fn connect_over_ssh(
-    unique_identifier: ConnectionIdentifier,
-    connection_options: SshConnectionOptions,
-    ui: Entity<RemoteConnectionPrompt>,
-    window: &mut Window,
-    cx: &mut App,
-) -> Task<Result<Option<Entity<RemoteClient>>>> {
-    let window = window.window_handle();
-    let known_password = connection_options
-        .password
-        .as_deref()
-        .and_then(|pw| EncryptedPassword::try_from(pw).ok());
-    let (tx, rx) = oneshot::channel();
-    ui.update(cx, |ui, _cx| ui.set_cancellation_tx(tx));
-
-    remote::RemoteClient::ssh(
-        unique_identifier,
-        connection_options,
-        rx,
-        Arc::new(RemoteClientDelegate {
-            window,
-            ui: ui.downgrade(),
-            known_password,
-        }),
-        cx,
-    )
 }
 
 pub fn connect(
@@ -576,20 +607,25 @@ pub fn connect(
             .and_then(|pw| pw.try_into().ok()),
         _ => None,
     };
-    let (tx, rx) = oneshot::channel();
+    let (tx, mut rx) = oneshot::channel();
     ui.update(cx, |ui, _cx| ui.set_cancellation_tx(tx));
 
-    remote::RemoteClient::new(
-        unique_identifier,
-        connection_options,
-        rx,
-        Arc::new(RemoteClientDelegate {
-            window,
-            ui: ui.downgrade(),
-            known_password,
-        }),
-        cx,
-    )
+    let delegate = Arc::new(RemoteClientDelegate {
+        window,
+        ui: ui.downgrade(),
+        known_password,
+    });
+
+    cx.spawn(async move |cx| {
+        let connection = remote::connect(connection_options, delegate.clone(), cx);
+        let connection = select! {
+            _ = rx => return Ok(None),
+            result = connection.fuse() => result,
+        }?;
+
+        cx.update(|cx| remote::RemoteClient::new(unique_identifier, connection, rx, delegate, cx))
+            .await
+    })
 }
 
 pub async fn open_remote_project(
@@ -599,18 +635,20 @@ pub async fn open_remote_project(
     open_options: workspace::OpenOptions,
     cx: &mut AsyncApp,
 ) -> Result<()> {
+    let created_new_window = open_options.replace_window.is_none();
     let window = if let Some(window) = open_options.replace_window {
         window
     } else {
         let workspace_position = cx
             .update(|cx| {
+                // todo: These paths are wrong they may have column and line information
                 workspace::remote_workspace_position_from_db(connection_options.clone(), &paths, cx)
-            })?
+            })
             .await
-            .context("fetching ssh workspace position from db")?;
+            .context("fetching remote workspace position from db")?;
 
         let mut options =
-            cx.update(|cx| (app_state.build_window_options)(workspace_position.display, cx))?;
+            cx.update(|cx| (app_state.build_window_options)(workspace_position.display, cx));
         options.window_bounds = workspace_position.window_bounds;
 
         cx.open_window(options, |window, cx| {
@@ -621,6 +659,7 @@ pub async fn open_remote_project(
                 app_state.languages.clone(),
                 app_state.fs.clone(),
                 None,
+                false,
                 cx,
             );
             cx.new(|cx| {
@@ -632,12 +671,13 @@ pub async fn open_remote_project(
     };
 
     loop {
-        let (cancel_tx, cancel_rx) = oneshot::channel();
+        let (cancel_tx, mut cancel_rx) = oneshot::channel();
         let delegate = window.update(cx, {
             let paths = paths.clone();
             let connection_options = connection_options.clone();
             move |workspace, window, cx| {
                 window.activate_window();
+                workspace.hide_modal(window, cx);
                 workspace.toggle_modal(window, cx, |window, cx| {
                     RemoteConnectionModal::new(&connection_options, paths, window, cx)
                 });
@@ -671,18 +711,82 @@ pub async fn open_remote_project(
 
         let Some(delegate) = delegate else { break };
 
-        let did_open_project = cx
+        let connection = remote::connect(connection_options.clone(), delegate.clone(), cx);
+        let connection = select! {
+            _ = cancel_rx => {
+                window
+                    .update(cx, |workspace, _, cx| {
+                        if let Some(ui) = workspace.active_modal::<RemoteConnectionModal>(cx) {
+                            ui.update(cx, |modal, cx| modal.finished(cx))
+                        }
+                    })
+                    .ok();
+
+                break;
+            },
+            result = connection.fuse() => result,
+        };
+        let remote_connection = match connection {
+            Ok(connection) => connection,
+            Err(e) => {
+                window
+                    .update(cx, |workspace, _, cx| {
+                        if let Some(ui) = workspace.active_modal::<RemoteConnectionModal>(cx) {
+                            ui.update(cx, |modal, cx| modal.finished(cx))
+                        }
+                    })
+                    .ok();
+                log::error!("Failed to open project: {e:#}");
+                let response = window
+                    .update(cx, |_, window, cx| {
+                        window.prompt(
+                            PromptLevel::Critical,
+                            match connection_options {
+                                RemoteConnectionOptions::Ssh(_) => "Failed to connect over SSH",
+                                RemoteConnectionOptions::Wsl(_) => "Failed to connect to WSL",
+                                RemoteConnectionOptions::Docker(_) => {
+                                    "Failed to connect to Dev Container"
+                                }
+                                #[cfg(any(test, feature = "test-support"))]
+                                RemoteConnectionOptions::Mock(_) => {
+                                    "Failed to connect to mock server"
+                                }
+                            },
+                            Some(&format!("{e:#}")),
+                            &["Retry", "Cancel"],
+                            cx,
+                        )
+                    })?
+                    .await;
+
+                if response == Ok(0) {
+                    continue;
+                }
+
+                if created_new_window {
+                    window
+                        .update(cx, |_, window, _| window.remove_window())
+                        .ok();
+                }
+                return Ok(());
+            }
+        };
+
+        let (paths, paths_with_positions) =
+            determine_paths_with_positions(&remote_connection, paths.clone()).await;
+
+        let opened_items = cx
             .update(|cx| {
                 workspace::open_remote_project_with_new_connection(
                     window,
-                    connection_options.clone(),
+                    remote_connection,
                     cancel_rx,
                     delegate.clone(),
                     app_state.clone(),
                     paths.clone(),
                     cx,
                 )
-            })?
+            })
             .await;
 
         window
@@ -693,40 +797,231 @@ pub async fn open_remote_project(
             })
             .ok();
 
-        if let Err(e) = did_open_project {
-            log::error!("Failed to open project: {e:?}");
-            let response = window
-                .update(cx, |_, window, cx| {
-                    window.prompt(
-                        PromptLevel::Critical,
-                        match connection_options {
-                            RemoteConnectionOptions::Ssh(_) => "Failed to connect over SSH",
-                            RemoteConnectionOptions::Wsl(_) => "Failed to connect to WSL",
-                        },
-                        Some(&e.to_string()),
-                        &["Retry", "Ok"],
-                        cx,
-                    )
-                })?
-                .await;
+        match opened_items {
+            Err(e) => {
+                log::error!("Failed to open project: {e:#}");
+                let response = window
+                    .update(cx, |_, window, cx| {
+                        window.prompt(
+                            PromptLevel::Critical,
+                            match connection_options {
+                                RemoteConnectionOptions::Ssh(_) => "Failed to connect over SSH",
+                                RemoteConnectionOptions::Wsl(_) => "Failed to connect to WSL",
+                                RemoteConnectionOptions::Docker(_) => {
+                                    "Failed to connect to Dev Container"
+                                }
+                                #[cfg(any(test, feature = "test-support"))]
+                                RemoteConnectionOptions::Mock(_) => {
+                                    "Failed to connect to mock server"
+                                }
+                            },
+                            Some(&format!("{e:#}")),
+                            &["Retry", "Cancel"],
+                            cx,
+                        )
+                    })?
+                    .await;
+                if response == Ok(0) {
+                    continue;
+                }
 
-            if response == Ok(0) {
-                continue;
+                window
+                    .update(cx, |workspace, window, cx| {
+                        if created_new_window {
+                            window.remove_window();
+                        }
+                        trusted_worktrees::track_worktree_trust(
+                            workspace.project().read(cx).worktree_store(),
+                            None,
+                            None,
+                            None,
+                            cx,
+                        );
+                    })
+                    .ok();
+            }
+
+            Ok(items) => {
+                for (item, path) in items.into_iter().zip(paths_with_positions) {
+                    let Some(item) = item else {
+                        continue;
+                    };
+                    let Some(row) = path.row else {
+                        continue;
+                    };
+                    if let Some(active_editor) = item.downcast::<Editor>() {
+                        window
+                            .update(cx, |_, window, cx| {
+                                active_editor.update(cx, |editor, cx| {
+                                    let row = row.saturating_sub(1);
+                                    let col = path.column.unwrap_or(0).saturating_sub(1);
+                                    editor.go_to_singleton_buffer_point(
+                                        Point::new(row, col),
+                                        window,
+                                        cx,
+                                    );
+                                });
+                            })
+                            .ok();
+                    }
+                }
             }
         }
-
-        window
-            .update(cx, |workspace, _, cx| {
-                if let Some(client) = workspace.project().read(cx).remote_client() {
-                    ExtensionStore::global(cx)
-                        .update(cx, |store, cx| store.register_remote_client(client, cx));
-                }
-            })
-            .ok();
 
         break;
     }
 
+    window
+        .update(cx, |workspace, _, cx| {
+            if let Some(client) = workspace.project().read(cx).remote_client() {
+                if let Some(extension_store) = ExtensionStore::try_global(cx) {
+                    extension_store
+                        .update(cx, |store, cx| store.register_remote_client(client, cx));
+                }
+            }
+        })
+        .ok();
     // Already showed the error to the user
     Ok(())
+}
+
+pub(crate) async fn determine_paths_with_positions(
+    remote_connection: &Arc<dyn RemoteConnection>,
+    mut paths: Vec<PathBuf>,
+) -> (Vec<PathBuf>, Vec<PathWithPosition>) {
+    let mut paths_with_positions = Vec::<PathWithPosition>::new();
+    for path in &mut paths {
+        if let Some(path_str) = path.to_str() {
+            let path_with_position = PathWithPosition::parse_str(&path_str);
+            if path_with_position.row.is_some() {
+                if !path_exists(&remote_connection, &path).await {
+                    *path = path_with_position.path.clone();
+                    paths_with_positions.push(path_with_position);
+                    continue;
+                }
+            }
+        }
+        paths_with_positions.push(PathWithPosition::from_path(path.clone()))
+    }
+    (paths, paths_with_positions)
+}
+
+async fn path_exists(connection: &Arc<dyn RemoteConnection>, path: &Path) -> bool {
+    let Ok(command) = connection.build_command(
+        Some("test".to_string()),
+        &["-e".to_owned(), path.to_string_lossy().to_string()],
+        &Default::default(),
+        None,
+        None,
+        Interactive::No,
+    ) else {
+        return false;
+    };
+    let Ok(mut child) = util::command::new_smol_command(command.program)
+        .args(command.args)
+        .envs(command.env)
+        .spawn()
+    else {
+        return false;
+    };
+    child.status().await.is_ok_and(|status| status.success())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use extension::ExtensionHostProxy;
+    use fs::FakeFs;
+    use gpui::TestAppContext;
+    use http_client::BlockedHttpClient;
+    use node_runtime::NodeRuntime;
+    use remote::RemoteClient;
+    use remote_server::{HeadlessAppState, HeadlessProject};
+    use serde_json::json;
+    use util::path;
+
+    #[gpui::test]
+    async fn test_open_remote_project_with_mock_connection(
+        cx: &mut TestAppContext,
+        server_cx: &mut TestAppContext,
+    ) {
+        let app_state = init_test(cx);
+        let executor = cx.executor();
+
+        cx.update(|cx| {
+            release_channel::init(semver::Version::new(0, 0, 0), cx);
+        });
+        server_cx.update(|cx| {
+            release_channel::init(semver::Version::new(0, 0, 0), cx);
+        });
+
+        let (opts, server_session, connect_guard) = RemoteClient::fake_server(cx, server_cx);
+
+        let remote_fs = FakeFs::new(server_cx.executor());
+        remote_fs
+            .insert_tree(
+                path!("/project"),
+                json!({
+                    "src": {
+                        "main.rs": "fn main() {}",
+                    },
+                    "README.md": "# Test Project",
+                }),
+            )
+            .await;
+
+        server_cx.update(HeadlessProject::init);
+        let http_client = Arc::new(BlockedHttpClient);
+        let node_runtime = NodeRuntime::unavailable();
+        let languages = Arc::new(language::LanguageRegistry::new(server_cx.executor()));
+        let proxy = Arc::new(ExtensionHostProxy::new());
+
+        let _headless = server_cx.new(|cx| {
+            HeadlessProject::new(
+                HeadlessAppState {
+                    session: server_session,
+                    fs: remote_fs.clone(),
+                    http_client,
+                    node_runtime,
+                    languages,
+                    extension_host_proxy: proxy,
+                },
+                false,
+                cx,
+            )
+        });
+
+        drop(connect_guard);
+
+        let paths = vec![PathBuf::from(path!("/project"))];
+        let open_options = workspace::OpenOptions::default();
+
+        let mut async_cx = cx.to_async();
+        let result = open_remote_project(opts, paths, app_state, open_options, &mut async_cx).await;
+
+        executor.run_until_parked();
+
+        assert!(result.is_ok(), "open_remote_project should succeed");
+
+        let windows = cx.update(|cx| cx.windows().len());
+        assert_eq!(windows, 1, "Should have opened a window");
+
+        let workspace_handle = cx.update(|cx| cx.windows()[0].downcast::<Workspace>().unwrap());
+
+        workspace_handle
+            .update(cx, |workspace, _, cx| {
+                let project = workspace.project().read(cx);
+                assert!(project.is_remote(), "Project should be a remote project");
+            })
+            .unwrap();
+    }
+
+    fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
+        cx.update(|cx| {
+            let state = AppState::test(cx);
+            crate::init(cx);
+            editor::init(cx);
+            state
+        })
+    }
 }
