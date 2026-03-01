@@ -93,8 +93,10 @@ impl CredentialsProvider for KeychainCredentialsProvider {
         cx: &'a AsyncApp,
     ) -> Pin<Box<dyn Future<Output = Result<Option<(String, Vec<u8>)>>> + 'a>> {
         async move {
-            let task = cx.update(|cx| cx.read_credentials(url));
-            task
+            match cx.update(|cx| cx.read_credentials(url)) {
+                Ok(task) => task.await,
+                Err(e) => Err(e),
+            }
         }.boxed_local()
     }
 
@@ -106,8 +108,10 @@ impl CredentialsProvider for KeychainCredentialsProvider {
         cx: &'a AsyncApp,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
         async move {
-            let task = cx.update(move |cx| cx.write_credentials(url, username, password));
-            task
+            match cx.update(move |cx| cx.write_credentials(url, username, password)) {
+                Ok(task) => task.await,
+                Err(e) => Err(e),
+            }
         }.boxed_local()
     }
 
@@ -117,8 +121,10 @@ impl CredentialsProvider for KeychainCredentialsProvider {
         cx: &'a AsyncApp,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
         async move {
-            let task = cx.update(move |cx| cx.delete_credentials(url));
-            task
+            match cx.update(move |cx| cx.delete_credentials(url)) {
+                Ok(task) => task.await,
+                Err(e) => Err(e),
+            }
         }.boxed_local()
     }
 }

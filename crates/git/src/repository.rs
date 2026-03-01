@@ -759,8 +759,13 @@ pub async fn get_git_committer(cx: &AsyncApp) -> GitCommitter {
             Ok(None)
         };
 
+    let git_binary_path = match git_binary_path {
+        Ok(Some(path)) => path,
+        Ok(None) => PathBuf::from("git"),
+        Err(_) => PathBuf::from("git"),
+    };
     let git = GitBinary::new(
-        git_binary_path.unwrap_or(PathBuf::from("git")),
+        git_binary_path,
         paths::home_dir().clone(),
         cx.background_executor().clone(),
     );
