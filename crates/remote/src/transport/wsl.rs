@@ -64,8 +64,10 @@ impl WslRemoteConnection {
             connection_options.distro_name,
             connection_options.user
         );
-        let (release_channel, version) =
-            cx.update(|cx| (ReleaseChannel::global(cx), AppVersion::global(cx)));
+        let Ok((release_channel, version)) =
+            cx.update(|cx| (ReleaseChannel::global(cx), AppVersion::global(cx))) else {
+            return Err(anyhow::anyhow!("Failed to get release info"));
+        };
 
         let mut this = Self {
             connection_options,

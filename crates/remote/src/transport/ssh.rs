@@ -594,8 +594,10 @@ impl SshRemoteConnection {
             ssh_default_system_shell,
         };
 
-        let (release_channel, version) =
-            cx.update(|cx| (ReleaseChannel::global(cx), AppVersion::global(cx)));
+        let Ok((release_channel, version)) =
+            cx.update(|cx| (ReleaseChannel::global(cx), AppVersion::global(cx))) else {
+            return Err(anyhow::anyhow!("Failed to get release info"));
+        };
         this.remote_binary_path = Some(
             this.ensure_server_binary(&delegate, release_channel, version, cx)
                 .await?,

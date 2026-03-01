@@ -62,13 +62,15 @@ impl DockerExecConnection {
             path_style: None,
             shell: "sh".to_owned(),
         };
-        let (release_channel, version, commit) = cx.update(|cx| {
+        let Ok((release_channel, version, commit)) = cx.update(|cx| {
             (
                 ReleaseChannel::global(cx),
                 AppVersion::global(cx),
                 AppCommitSha::try_global(cx),
             )
-        });
+        }) else {
+            return Err(anyhow::anyhow!("Failed to get release info"));
+        };
         let remote_platform = this.check_remote_platform().await?;
 
         this.path_style = match remote_platform.os {

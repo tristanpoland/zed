@@ -627,7 +627,7 @@ impl CopilotChat {
             .update(|cx| Self::global(cx))
             .context("Copilot chat is not enabled")?;
 
-        let (oauth_token, api_token, client, configuration) = this.read_with(cx, |this, _| {
+        let (oauth_token, api_token, client, configuration) = this.expect("CopilotChat entity missing").read_with(cx, |this, _| {
             (
                 this.oauth_token.clone(),
                 this.api_token.clone(),
@@ -644,7 +644,7 @@ impl CopilotChat {
                 let token_url = configuration.token_url();
                 let token =
                     request_api_token(&oauth_token, token_url.into(), client.clone()).await?;
-                this.update(cx, |this, cx| {
+                this.expect("CopilotChat entity missing").update(cx, |this, cx| {
                     this.api_token = Some(token.clone());
                     cx.notify();
                 });

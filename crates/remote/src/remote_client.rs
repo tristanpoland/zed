@@ -368,13 +368,12 @@ pub async fn connect(
     delegate: Arc<dyn RemoteClientDelegate>,
     cx: &mut AsyncApp,
 ) -> Result<Arc<dyn RemoteConnection>> {
-    cx.update(|cx| {
+    let task = cx.update(|cx| {
         cx.update_default_global(|pool: &mut ConnectionPool, cx| {
             pool.connect(connection_options.clone(), delegate.clone(), cx)
         })
-    })
-    .await
-    .map_err(|e| e.cloned())
+    })?;
+    task.await.map_err(|e| e.cloned())
 }
 
 impl RemoteClient {
@@ -400,7 +399,7 @@ impl RemoteClient {
                         "client",
                         remote_connection.has_wsl_interop(),
                     )
-                });
+                })?;
 
                 let path_style = remote_connection.path_style();
                 let this = cx.new(|_| Self {
