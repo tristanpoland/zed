@@ -13,12 +13,12 @@ dependencies = [
  "base64 0.22.1",
  "buffer_diff",
  "chrono",
- "collections",
+ "collections 0.1.0",
  "editor",
  "env_logger 0.11.8",
  "file_icons",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "image",
  "indoc",
  "itertools 0.14.0",
@@ -41,7 +41,7 @@ dependencies = [
  "ui",
  "url",
  "urlencoding",
- "util",
+ "util 0.1.0",
  "uuid",
  "watch",
  "zlog",
@@ -52,8 +52,8 @@ name = "acp_tools"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
- "collections",
- "gpui",
+ "collections 0.1.0",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "markdown",
  "project",
@@ -62,7 +62,7 @@ dependencies = [
  "settings",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -73,10 +73,10 @@ dependencies = [
  "anyhow",
  "buffer_diff",
  "clock",
- "collections",
+ "collections 0.1.0",
  "ctor",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "language",
  "log",
@@ -87,7 +87,7 @@ dependencies = [
  "settings",
  "telemetry",
  "text",
- "util",
+ "util 0.1.0",
  "watch",
  "zlog",
 ]
@@ -102,7 +102,7 @@ dependencies = [
  "extension_host",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "project",
  "proto",
@@ -110,7 +110,7 @@ dependencies = [
  "semver",
  "smallvec",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -155,7 +155,7 @@ dependencies = [
  "client",
  "clock",
  "cloud_llm_client",
- "collections",
+ "collections 0.1.0",
  "context_server",
  "ctor",
  "db",
@@ -167,11 +167,11 @@ dependencies = [
  "fs",
  "futures 0.3.31",
  "git",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
  "handlebars 4.5.0",
  "html_to_markdown",
- "http_client",
+ "http_client 0.1.0",
  "indoc",
  "itertools 0.14.0",
  "language",
@@ -209,7 +209,7 @@ dependencies = [
  "ui",
  "unindent",
  "url",
- "util",
+ "util 0.1.0",
  "uuid",
  "watch",
  "web_search",
@@ -262,14 +262,14 @@ dependencies = [
  "async-trait",
  "chrono",
  "client",
- "collections",
+ "collections 0.1.0",
  "env_logger 0.11.8",
  "feature_flags",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
- "http_client",
+ "http_client 0.1.0",
  "indoc",
  "language",
  "language_model",
@@ -288,7 +288,7 @@ dependencies = [
  "terminal",
  "thiserror 2.0.12",
  "ui",
- "util",
+ "util 0.1.0",
  "uuid",
  "watch",
 ]
@@ -299,10 +299,10 @@ version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "convert_case 0.8.0",
  "fs",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language_model",
  "log",
  "paths",
@@ -313,7 +313,7 @@ dependencies = [
  "serde_json",
  "serde_json_lenient",
  "settings",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -340,7 +340,7 @@ dependencies = [
  "client",
  "clock",
  "cloud_llm_client",
- "collections",
+ "collections 0.1.0",
  "command_palette_hooks",
  "component",
  "context_server",
@@ -355,10 +355,10 @@ dependencies = [
  "futures 0.3.31",
  "fuzzy",
  "git_ui",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
  "html_to_markdown",
- "http_client",
+ "http_client 0.1.0",
  "image",
  "indoc",
  "itertools 0.14.0",
@@ -411,7 +411,7 @@ dependencies = [
  "ui_input",
  "unindent",
  "url",
- "util",
+ "util 0.1.0",
  "uuid",
  "watch",
  "workspace",
@@ -432,7 +432,7 @@ dependencies = [
  "db",
  "feature_flags",
  "fs",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "log",
  "project",
  "prompt_store",
@@ -440,7 +440,7 @@ dependencies = [
  "serde_json",
  "settings",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -486,7 +486,7 @@ dependencies = [
  "client",
  "cloud_llm_client",
  "component",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language_model",
  "serde",
  "smallvec",
@@ -672,7 +672,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "futures 0.3.31",
- "http_client",
+ "http_client 0.1.0",
  "schemars",
  "serde",
  "serde_json",
@@ -777,6 +777,27 @@ dependencies = [
 
 [[package]]
 name = "ashpd"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2f3f79755c74fd155000314eb349864caa787c6592eace6c6882dad873d9c39"
+dependencies = [
+ "async-fs",
+ "async-net",
+ "enumflags2",
+ "futures-channel",
+ "futures-util",
+ "rand 0.9.1",
+ "serde",
+ "serde_repr",
+ "url",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols 0.32.10",
+ "zbus",
+]
+
+[[package]]
+name = "ashpd"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "618a409b91d5265798a99e3d1d0b226911605e581c4e7255e83c1e397b172bce"
@@ -792,7 +813,7 @@ dependencies = [
  "url",
  "wayland-backend",
  "wayland-client",
- "wayland-protocols",
+ "wayland-protocols 0.32.10",
  "zbus",
 ]
 
@@ -802,12 +823,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "log",
  "net",
  "smol",
  "tempfile",
- "util",
+ "util 0.1.0",
  "windows 0.61.1",
  "zeroize",
 ]
@@ -817,7 +838,7 @@ name = "assets"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "rust-embed",
 ]
 
@@ -827,11 +848,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "collections",
+ "collections 0.1.0",
  "derive_more 0.99.19",
  "extension",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "language_model",
  "parking_lot",
@@ -839,7 +860,7 @@ dependencies = [
  "serde",
  "serde_json",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -850,16 +871,16 @@ dependencies = [
  "anyhow",
  "assistant_slash_command",
  "chrono",
- "collections",
+ "collections 0.1.0",
  "context_server",
  "editor",
  "feature_flags",
  "fs",
  "futures 0.3.31",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "html_to_markdown",
- "http_client",
+ "http_client 0.1.0",
  "language",
  "pretty_assertions",
  "project",
@@ -871,7 +892,7 @@ dependencies = [
  "smol",
  "text",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "worktree",
  "zlog",
@@ -889,12 +910,12 @@ dependencies = [
  "client",
  "clock",
  "cloud_llm_client",
- "collections",
+ "collections 0.1.0",
  "context_server",
  "fs",
  "futures 0.3.31",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "itertools 0.14.0",
  "language",
@@ -919,7 +940,7 @@ dependencies = [
  "text",
  "ui",
  "unindent",
- "util",
+ "util 0.1.0",
  "uuid",
  "workspace",
  "zed_env_vars",
@@ -1323,10 +1344,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-tar",
- "collections",
+ "collections 0.1.0",
  "crossbeam",
  "denoise",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "libwebrtc",
  "log",
  "parking_lot",
@@ -1335,7 +1356,7 @@ dependencies = [
  "settings",
  "smol",
  "thiserror 2.0.12",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -1360,8 +1381,8 @@ dependencies = [
  "ctor",
  "db",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "log",
  "parking_lot",
  "paths",
@@ -1372,7 +1393,7 @@ dependencies = [
  "settings",
  "smol",
  "tempfile",
- "util",
+ "util 0.1.0",
  "which 6.0.3",
  "workspace",
  "zlog",
@@ -1398,14 +1419,14 @@ dependencies = [
  "auto_update",
  "client",
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "markdown_preview",
  "release_channel",
  "semver",
  "serde",
  "serde_json",
  "smol",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -1931,7 +1952,7 @@ version = "0.1.0"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
- "http_client",
+ "http_client 0.1.0",
 ]
 
 [[package]]
@@ -2222,9 +2243,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "blade-graphics"
+version = "0.7.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/blade#af82c00fe2f576844bcb8e081ac7dfe519a0877a"
+dependencies = [
+ "ash",
+ "ash-window",
+ "bitflags 2.9.0",
+ "bytemuck",
+ "codespan-reporting",
+ "glow",
+ "gpu-alloc",
+ "gpu-alloc-ash",
+ "hidden-trait",
+ "js-sys",
+ "khronos-egl",
+ "libloading",
+ "log",
+ "mint",
+ "naga",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-core-foundation",
+ "objc2-foundation",
+ "objc2-metal",
+ "objc2-quartz-core",
+ "objc2-ui-kit",
+ "once_cell",
+ "raw-window-handle",
+ "slab",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "blade-macros"
 version = "0.3.0"
 source = "git+https://github.com/kvark/blade?rev=e3cf011ca18a6dfd907d1dedd93e85e21f005fe3#e3cf011ca18a6dfd907d1dedd93e85e21f005fe3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "blade-macros"
+version = "0.3.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/blade#af82c00fe2f576844bcb8e081ac7dfe519a0877a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2236,7 +2301,18 @@ name = "blade-util"
 version = "0.3.0"
 source = "git+https://github.com/kvark/blade?rev=e3cf011ca18a6dfd907d1dedd93e85e21f005fe3#e3cf011ca18a6dfd907d1dedd93e85e21f005fe3"
 dependencies = [
- "blade-graphics",
+ "blade-graphics 0.7.0 (git+https://github.com/kvark/blade?rev=e3cf011ca18a6dfd907d1dedd93e85e21f005fe3)",
+ "bytemuck",
+ "log",
+ "profiling",
+]
+
+[[package]]
+name = "blade-util"
+version = "0.3.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/blade#af82c00fe2f576844bcb8e081ac7dfe519a0877a"
+dependencies = [
+ "blade-graphics 0.7.0 (git+https://github.com/Far-Beyond-Pulsar/blade)",
  "bytemuck",
  "log",
  "profiling",
@@ -2336,7 +2412,7 @@ name = "breadcrumbs"
 version = "0.1.0"
 dependencies = [
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "theme",
  "ui",
  "workspace",
@@ -2382,7 +2458,7 @@ dependencies = [
  "ctor",
  "futures 0.3.31",
  "git2",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "log",
  "pretty_assertions",
@@ -2390,11 +2466,11 @@ dependencies = [
  "rope",
  "serde_json",
  "settings",
- "sum_tree",
+ "sum_tree 0.1.0",
  "text",
  "tracing",
  "unindent",
- "util",
+ "util 0.1.0",
  "zlog",
  "ztracing",
 ]
@@ -2566,13 +2642,13 @@ dependencies = [
  "anyhow",
  "audio",
  "client",
- "collections",
+ "collections 0.1.0",
  "feature_flags",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
- "http_client",
+ "http_client 0.1.0",
  "language",
  "livekit_client",
  "log",
@@ -2581,7 +2657,7 @@ dependencies = [
  "serde",
  "settings",
  "telemetry",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -2879,10 +2955,10 @@ dependencies = [
  "anyhow",
  "client",
  "clock",
- "collections",
+ "collections 0.1.0",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "language",
  "log",
  "postage",
@@ -2892,7 +2968,7 @@ dependencies = [
  "settings",
  "text",
  "time",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -3039,7 +3115,7 @@ dependencies = [
  "anyhow",
  "askpass",
  "clap",
- "collections",
+ "collections 0.1.0",
  "core-foundation 0.10.0",
  "core-services",
  "exec",
@@ -3053,7 +3129,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "util",
+ "util 0.1.0",
  "windows 0.61.1",
 ]
 
@@ -3068,15 +3144,15 @@ dependencies = [
  "clock",
  "cloud_api_client",
  "cloud_llm_client",
- "collections",
+ "collections 0.1.0",
  "credentials_provider",
  "derive_more 0.99.19",
  "feature_flags",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
- "http_client",
+ "http_client 0.1.0",
  "http_client_tls",
  "httparse",
  "log",
@@ -3107,7 +3183,7 @@ dependencies = [
  "tokio-rustls 0.26.2",
  "tokio-socks",
  "url",
- "util",
+ "util 0.1.0",
  "windows 0.61.1",
  "worktree",
 ]
@@ -3128,9 +3204,9 @@ dependencies = [
  "anyhow",
  "cloud_api_types",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
- "http_client",
+ "http_client 0.1.0",
  "parking_lot",
  "serde_json",
  "yawc",
@@ -3257,8 +3333,8 @@ dependencies = [
  "edit_prediction",
  "edit_prediction_types",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "language",
  "language_models",
  "log",
@@ -3295,7 +3371,7 @@ dependencies = [
  "client",
  "clock",
  "collab_ui",
- "collections",
+ "collections 0.1.0",
  "command_palette_hooks",
  "context_server",
  "ctor",
@@ -3313,10 +3389,10 @@ dependencies = [
  "git",
  "git_hosting_providers",
  "git_ui",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
  "hex",
- "http_client",
+ "http_client 0.1.0",
  "hyper 0.14.32",
  "indoc",
  "language",
@@ -3369,7 +3445,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "unindent",
- "util",
+ "util 0.1.0",
  "uuid",
  "workspace",
  "worktree",
@@ -3385,13 +3461,13 @@ dependencies = [
  "channel",
  "chrono",
  "client",
- "collections",
+ "collections 0.1.0",
  "db",
  "editor",
  "futures 0.3.31",
  "fuzzy",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "log",
  "menu",
  "notifications",
@@ -3412,13 +3488,22 @@ dependencies = [
  "title_bar",
  "tree-sitter-md",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
 [[package]]
 name = "collections"
 version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "rustc-hash 2.1.1",
+]
+
+[[package]]
+name = "collections"
+version = "0.1.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
 dependencies = [
  "indexmap",
  "rustc-hash 2.1.1",
@@ -3462,7 +3547,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "client",
- "collections",
+ "collections 0.1.0",
  "command_palette_hooks",
  "ctor",
  "db",
@@ -3470,7 +3555,7 @@ dependencies = [
  "env_logger 0.11.8",
  "fuzzy",
  "go_to_line",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "log",
  "menu",
@@ -3484,7 +3569,7 @@ dependencies = [
  "theme",
  "time",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -3493,9 +3578,9 @@ dependencies = [
 name = "command_palette_hooks"
 version = "0.1.0"
 dependencies = [
- "collections",
+ "collections 0.1.0",
  "derive_more 0.99.19",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "workspace",
 ]
 
@@ -3503,9 +3588,9 @@ dependencies = [
 name = "component"
 version = "0.1.0"
 dependencies = [
- "collections",
+ "collections 0.1.0",
  "documented",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "inventory",
  "parking_lot",
  "strum 0.27.2",
@@ -3518,11 +3603,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "client",
- "collections",
+ "collections 0.1.0",
  "component",
  "db",
  "fs",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "log",
  "node_runtime",
@@ -3619,10 +3704,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "collections",
+ "collections 0.1.0",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "log",
  "net",
  "parking_lot",
@@ -3636,7 +3721,7 @@ dependencies = [
  "tempfile",
  "terminal",
  "url",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -3680,7 +3765,7 @@ dependencies = [
  "async-std",
  "client",
  "clock",
- "collections",
+ "collections 0.1.0",
  "command_palette_hooks",
  "copilot_chat",
  "ctor",
@@ -3688,8 +3773,8 @@ dependencies = [
  "editor",
  "fs",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "indoc",
  "language",
  "log",
@@ -3703,9 +3788,9 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
- "sum_tree",
+ "sum_tree 0.1.0",
  "theme",
- "util",
+ "util 0.1.0",
  "zlog",
 ]
 
@@ -3715,12 +3800,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "collections",
+ "collections 0.1.0",
  "dirs 4.0.0",
  "fs",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "itertools 0.14.0",
  "log",
  "paths",
@@ -3735,13 +3820,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "copilot",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "log",
  "lsp",
  "menu",
  "serde_json",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -4222,7 +4307,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "paths",
  "release_channel",
  "serde",
@@ -4484,12 +4569,12 @@ dependencies = [
  "async-tar",
  "async-trait",
  "client",
- "collections",
+ "collections 0.1.0",
  "dap-types",
  "fs",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "language",
  "libc",
  "log",
@@ -4507,7 +4592,7 @@ dependencies = [
  "telemetry",
  "tree-sitter",
  "tree-sitter-go",
- "util",
+ "util 0.1.0",
  "zlog",
 ]
 
@@ -4527,13 +4612,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "collections",
+ "collections 0.1.0",
  "dap",
  "dotenvy",
  "fs",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "json_dotpath",
  "language",
  "log",
@@ -4544,7 +4629,7 @@ dependencies = [
  "settings",
  "smol",
  "task",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -4632,7 +4717,7 @@ name = "db"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "log",
  "paths",
@@ -4641,7 +4726,7 @@ dependencies = [
  "sqlez",
  "sqlez_macros",
  "tempfile",
- "util",
+ "util 0.1.0",
  "zed_env_vars",
 ]
 
@@ -4662,13 +4747,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "collections",
+ "collections 0.1.0",
  "dap",
  "extension",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "serde_json",
  "task",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -4679,12 +4764,12 @@ dependencies = [
  "dap",
  "editor",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "project",
  "serde_json",
  "settings",
  "smol",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -4696,7 +4781,7 @@ dependencies = [
  "anyhow",
  "bitflags 2.9.0",
  "client",
- "collections",
+ "collections 0.1.0",
  "command_palette_hooks",
  "dap",
  "dap_adapters",
@@ -4707,7 +4792,7 @@ dependencies = [
  "file_icons",
  "futures 0.3.31",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "hex",
  "indoc",
  "itertools 0.14.0",
@@ -4740,7 +4825,7 @@ dependencies = [
  "ui",
  "ui_input",
  "unindent",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
  "zlog",
@@ -4761,7 +4846,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures 0.3.31",
- "http_client",
+ "http_client 0.1.0",
  "schemars",
  "serde",
  "serde_json",
@@ -4874,6 +4959,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_refineable"
+version = "0.1.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "derive_setters"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4896,9 +4991,9 @@ name = "dev_container"
 version = "0.1.0"
 dependencies = [
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "http 1.3.1",
- "http_client",
+ "http_client 0.1.0",
  "log",
  "menu",
  "node_runtime",
@@ -4909,7 +5004,7 @@ dependencies = [
  "settings",
  "smol",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -4919,11 +5014,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "client",
- "collections",
+ "collections 0.1.0",
  "component",
  "ctor",
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "itertools 0.14.0",
  "language",
@@ -4941,7 +5036,7 @@ dependencies = [
  "theme",
  "ui",
  "unindent",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
  "zlog",
@@ -5098,7 +5193,7 @@ dependencies = [
  "settings",
  "task",
  "theme",
- "util",
+ "util 0.1.0",
  "zlog",
 ]
 
@@ -5253,7 +5348,7 @@ dependencies = [
  "clock",
  "cloud_api_types",
  "cloud_llm_client",
- "collections",
+ "collections 0.1.0",
  "copilot",
  "copilot_ui",
  "ctor",
@@ -5263,7 +5358,7 @@ dependencies = [
  "feature_flags",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "itertools 0.14.0",
  "language",
@@ -5292,7 +5387,7 @@ dependencies = [
  "time",
  "toml 0.8.20",
  "ui",
- "util",
+ "util 0.1.0",
  "uuid",
  "workspace",
  "worktree",
@@ -5311,7 +5406,7 @@ dependencies = [
  "clap",
  "client",
  "cloud_llm_client",
- "collections",
+ "collections 0.1.0",
  "debug_adapter_extension",
  "dirs 4.0.0",
  "edit_prediction",
@@ -5319,9 +5414,9 @@ dependencies = [
  "flate2",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
- "http_client",
+ "http_client 0.1.0",
  "indoc",
  "language",
  "language_extension",
@@ -5348,7 +5443,7 @@ dependencies = [
  "sqlez_macros",
  "tempfile",
  "terminal_view",
- "util",
+ "util 0.1.0",
  "wasmtime",
  "watch",
  "workspace",
@@ -5361,10 +5456,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clock",
- "collections",
+ "collections 0.1.0",
  "env_logger 0.11.8",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "language",
  "log",
@@ -5378,7 +5473,7 @@ dependencies = [
  "smallvec",
  "text",
  "tree-sitter",
- "util",
+ "util 0.1.0",
  "zeta_prompt",
  "zlog",
 ]
@@ -5388,7 +5483,7 @@ name = "edit_prediction_types"
 version = "0.1.0"
 dependencies = [
  "client",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "text",
 ]
@@ -5403,7 +5498,7 @@ dependencies = [
  "clock",
  "cloud_llm_client",
  "codestral",
- "collections",
+ "collections 0.1.0",
  "command_palette_hooks",
  "copilot",
  "copilot_chat",
@@ -5414,7 +5509,7 @@ dependencies = [
  "feature_flags",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "language",
  "language_model",
@@ -5436,7 +5531,7 @@ dependencies = [
  "theme",
  "time",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
  "zeta_prompt",
@@ -5453,7 +5548,7 @@ dependencies = [
  "buffer_diff",
  "client",
  "clock",
- "collections",
+ "collections 0.1.0",
  "convert_case 0.8.0",
  "criterion",
  "ctor",
@@ -5467,8 +5562,8 @@ dependencies = [
  "futures 0.3.31",
  "fuzzy",
  "git",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "indoc",
  "itertools 0.14.0",
  "language",
@@ -5496,7 +5591,7 @@ dependencies = [
  "smallvec",
  "smol",
  "snippet",
- "sum_tree",
+ "sum_tree 0.1.0",
  "task",
  "telemetry",
  "tempfile",
@@ -5517,7 +5612,7 @@ dependencies = [
  "unicode-segmentation",
  "unindent",
  "url",
- "util",
+ "util 0.1.0",
  "uuid",
  "vim_mode_setting",
  "workspace",
@@ -5632,7 +5727,7 @@ version = "0.1.0"
 dependencies = [
  "editor",
  "encoding_rs",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "ui",
  "workspace",
 ]
@@ -5813,7 +5908,7 @@ dependencies = [
  "chrono",
  "clap",
  "client",
- "collections",
+ "collections 0.1.0",
  "debug_adapter_extension",
  "dirs 4.0.0",
  "dotenvy",
@@ -5821,7 +5916,7 @@ dependencies = [
  "extension",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
  "handlebars 4.5.0",
  "language",
@@ -5848,7 +5943,7 @@ dependencies = [
  "terminal_view",
  "toml 0.8.20",
  "unindent",
- "util",
+ "util 0.1.0",
  "uuid",
  "watch",
 ]
@@ -5857,7 +5952,7 @@ dependencies = [
 name = "eval_utils"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "serde",
  "smol",
 ]
@@ -5935,13 +6030,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "collections",
+ "collections 0.1.0",
  "dap",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "heck 0.5.0",
- "http_client",
+ "http_client 0.1.0",
  "indoc",
  "language",
  "log",
@@ -5957,7 +6052,7 @@ dependencies = [
  "toml 0.8.20",
  "tracing",
  "url",
- "util",
+ "util 0.1.0",
  "wasm-encoder 0.221.3",
  "wasmparser 0.221.3",
  "ztracing",
@@ -5972,7 +6067,7 @@ dependencies = [
  "env_logger 0.11.8",
  "extension",
  "fs",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "log",
  "reqwest_client",
@@ -5995,16 +6090,16 @@ dependencies = [
  "async-tar",
  "async-trait",
  "client",
- "collections",
+ "collections 0.1.0",
  "criterion",
  "ctor",
  "dap",
  "extension",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
- "http_client",
+ "http_client 0.1.0",
  "language",
  "language_extension",
  "log",
@@ -6031,7 +6126,7 @@ dependencies = [
  "toml 0.8.20",
  "tracing",
  "url",
- "util",
+ "util 0.1.0",
  "wasmparser 0.221.3",
  "wasmtime",
  "wasmtime-wasi",
@@ -6045,14 +6140,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "client",
- "collections",
+ "collections 0.1.0",
  "db",
  "editor",
  "extension",
  "extension_host",
  "fs",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "log",
  "num-format",
@@ -6067,7 +6162,7 @@ dependencies = [
  "telemetry",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "vim_mode_setting",
  "workspace",
  "zed_actions",
@@ -6136,7 +6231,7 @@ name = "feature_flags"
 version = "0.1.0"
 dependencies = [
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
 ]
 
 [[package]]
@@ -6144,10 +6239,10 @@ name = "feedback"
 version = "0.1.0"
 dependencies = [
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "system_specs",
  "urlencoding",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -6167,13 +6262,13 @@ name = "file_finder"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "ctor",
  "editor",
  "file_icons",
  "futures 0.3.31",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "menu",
  "picker",
@@ -6187,7 +6282,7 @@ dependencies = [
  "text",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zlog",
 ]
@@ -6196,10 +6291,10 @@ dependencies = [
 name = "file_icons"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "serde",
  "theme",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -6450,15 +6545,15 @@ name = "fs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ashpd",
+ "ashpd 0.12.1",
  "async-tar",
  "async-trait",
  "cocoa 0.26.0",
- "collections",
+ "collections 0.1.0",
  "fsevent",
  "futures 0.3.31",
  "git",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "ignore",
  "is_executable",
  "libc",
@@ -6475,7 +6570,7 @@ dependencies = [
  "tempfile",
  "text",
  "time",
- "util",
+ "util 0.1.0",
  "windows 0.61.1",
 ]
 
@@ -6505,7 +6600,7 @@ name = "fs_benchmarks"
 version = "0.1.0"
 dependencies = [
  "fs",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
 ]
 
 [[package]]
@@ -6700,9 +6795,9 @@ dependencies = [
 name = "fuzzy"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "log",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -7076,12 +7171,12 @@ dependencies = [
  "anyhow",
  "askpass",
  "async-trait",
- "collections",
+ "collections 0.1.0",
  "derive_more 0.99.19",
  "futures 0.3.31",
  "git2",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "itertools 0.14.0",
  "log",
  "parking_lot",
@@ -7093,7 +7188,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smol",
- "sum_tree",
+ "sum_tree 0.1.0",
  "tempfile",
  "text",
  "thiserror 2.0.12",
@@ -7101,7 +7196,7 @@ dependencies = [
  "unindent",
  "url",
  "urlencoding",
- "util",
+ "util 0.1.0",
  "uuid",
  "ztracing",
 ]
@@ -7127,8 +7222,8 @@ dependencies = [
  "async-trait",
  "futures 0.3.31",
  "git",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "indoc",
  "itertools 0.14.0",
  "pretty_assertions",
@@ -7138,7 +7233,7 @@ dependencies = [
  "settings",
  "url",
  "urlencoding",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -7151,7 +7246,7 @@ dependencies = [
  "buffer_diff",
  "call",
  "cloud_llm_client",
- "collections",
+ "collections 0.1.0",
  "command_palette_hooks",
  "component",
  "ctor",
@@ -7161,7 +7256,7 @@ dependencies = [
  "fuzzy",
  "git",
  "git_hosting_providers",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "itertools 0.14.0",
  "language",
@@ -7193,7 +7288,7 @@ dependencies = [
  "tracing",
  "ui",
  "unindent",
- "util",
+ "util 0.1.0",
  "watch",
  "windows 0.61.1",
  "workspace",
@@ -7251,7 +7346,7 @@ name = "go_to_line"
 version = "0.1.0"
 dependencies = [
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "language",
  "menu",
@@ -7265,7 +7360,7 @@ dependencies = [
  "tree-sitter-rust",
  "tree-sitter-typescript",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -7286,7 +7381,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures 0.3.31",
- "http_client",
+ "http_client 0.1.0",
  "schemars",
  "serde",
  "serde_json",
@@ -7331,14 +7426,14 @@ dependencies = [
  "anyhow",
  "as-raw-xcb-connection",
  "ash",
- "ashpd",
+ "ashpd 0.12.1",
  "async-task",
  "backtrace",
  "bindgen 0.71.1",
  "bitflags 2.9.0",
- "blade-graphics",
- "blade-macros",
- "blade-util",
+ "blade-graphics 0.7.0 (git+https://github.com/kvark/blade?rev=e3cf011ca18a6dfd907d1dedd93e85e21f005fe3)",
+ "blade-macros 0.3.0 (git+https://github.com/kvark/blade?rev=e3cf011ca18a6dfd907d1dedd93e85e21f005fe3)",
+ "blade-util 0.3.0 (git+https://github.com/kvark/blade?rev=e3cf011ca18a6dfd907d1dedd93e85e21f005fe3)",
  "block",
  "bytemuck",
  "calloop",
@@ -7348,7 +7443,7 @@ dependencies = [
  "circular-buffer",
  "cocoa 0.26.0",
  "cocoa-foundation 0.2.0",
- "collections",
+ "collections 0.1.0",
  "core-foundation 0.10.0",
  "core-foundation-sys",
  "core-graphics 0.24.0",
@@ -7363,8 +7458,8 @@ dependencies = [
  "filedescriptor",
  "foreign-types 0.5.0",
  "futures 0.3.31",
- "gpui_macros",
- "http_client",
+ "gpui_macros 0.1.0",
+ "http_client 0.1.0",
  "image",
  "inventory",
  "itertools 0.14.0",
@@ -7372,7 +7467,7 @@ dependencies = [
  "log",
  "lyon",
  "mach2 0.5.0",
- "media",
+ "media 0.1.0",
  "metal",
  "naga",
  "num_cpus",
@@ -7390,7 +7485,7 @@ dependencies = [
  "profiling",
  "rand 0.9.1",
  "raw-window-handle",
- "refineable",
+ "refineable 0.1.0",
  "reqwest_client",
  "resvg",
  "scheduler",
@@ -7404,21 +7499,122 @@ dependencies = [
  "smol",
  "spin 0.10.0",
  "strum 0.27.2",
- "sum_tree",
+ "sum_tree 0.1.0",
  "swash",
  "taffy",
  "thiserror 2.0.12",
  "unicode-segmentation",
  "usvg",
- "util",
- "util_macros",
+ "util 0.1.0",
+ "util_macros 0.1.0",
  "uuid",
  "waker-fn",
  "wayland-backend",
  "wayland-client",
  "wayland-cursor",
- "wayland-protocols",
- "wayland-protocols-plasma",
+ "wayland-protocols 0.32.10",
+ "wayland-protocols-plasma 0.3.10",
+ "wayland-protocols-wlr",
+ "windows 0.61.1",
+ "windows-core 0.61.0",
+ "windows-numerics",
+ "windows-registry 0.5.1",
+ "x11-clipboard",
+ "x11rb",
+ "xkbcommon",
+ "zed-font-kit",
+ "zed-scap",
+ "zed-xim",
+]
+
+[[package]]
+name = "gpui"
+version = "0.2.2"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
+dependencies = [
+ "anyhow",
+ "as-raw-xcb-connection",
+ "ashpd 0.11.1",
+ "async-task",
+ "backtrace",
+ "bindgen 0.71.1",
+ "bitflags 2.9.0",
+ "blade-graphics 0.7.0 (git+https://github.com/Far-Beyond-Pulsar/blade)",
+ "blade-macros 0.3.0 (git+https://github.com/Far-Beyond-Pulsar/blade)",
+ "blade-util 0.3.0 (git+https://github.com/Far-Beyond-Pulsar/blade)",
+ "block",
+ "bytemuck",
+ "calloop",
+ "calloop-wayland-source",
+ "cbindgen",
+ "circular-buffer",
+ "cocoa 0.26.0",
+ "cocoa-foundation 0.2.0",
+ "collections 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "core-foundation 0.10.0",
+ "core-foundation-sys",
+ "core-graphics 0.24.0",
+ "core-text",
+ "core-video",
+ "cosmic-text",
+ "ctor",
+ "derive_more 0.99.19",
+ "embed-resource",
+ "etagere",
+ "filedescriptor",
+ "flume",
+ "foreign-types 0.5.0",
+ "futures 0.3.31",
+ "gpui_macros 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "image",
+ "inventory",
+ "itertools 0.14.0",
+ "libc",
+ "log",
+ "lyon",
+ "mach2 0.5.0",
+ "media 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "metal",
+ "naga",
+ "num_cpus",
+ "objc",
+ "oo7",
+ "open",
+ "parking",
+ "parking_lot",
+ "pathfinder_geometry",
+ "pin-project",
+ "postage",
+ "profiling",
+ "rand 0.9.1",
+ "raw-window-handle",
+ "refineable 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "resvg",
+ "schemars",
+ "seahash",
+ "semver",
+ "serde",
+ "serde_json",
+ "slotmap",
+ "smallvec",
+ "smol",
+ "spin 0.10.0",
+ "stacksafe",
+ "strum 0.27.2",
+ "sum_tree 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "taffy",
+ "thiserror 2.0.12",
+ "usvg",
+ "util 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "util_macros 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "uuid",
+ "waker-fn",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-cursor",
+ "wayland-protocols 0.31.2",
+ "wayland-protocols-plasma 0.2.0",
  "wayland-protocols-wlr",
  "windows 0.61.1",
  "windows-core 0.61.0",
@@ -7436,7 +7632,18 @@ dependencies = [
 name = "gpui_macros"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "gpui_macros"
+version = "0.1.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
+dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
@@ -7448,9 +7655,9 @@ name = "gpui_tokio"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "tokio",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -7885,7 +8092,32 @@ dependencies = [
  "sha2",
  "tempfile",
  "url",
- "util",
+ "util 0.1.0",
+]
+
+[[package]]
+name = "http_client"
+version = "0.1.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
+dependencies = [
+ "anyhow",
+ "async-compression",
+ "async-fs",
+ "async-tar",
+ "bytes 1.10.1",
+ "derive_more 0.99.19",
+ "futures 0.3.31",
+ "http 1.3.1",
+ "http-body 1.0.1",
+ "log",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sha2",
+ "tempfile",
+ "url",
+ "util 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
 ]
 
 [[package]]
@@ -8274,7 +8506,7 @@ dependencies = [
  "db",
  "editor",
  "file_icons",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "log",
  "project",
@@ -8282,7 +8514,7 @@ dependencies = [
  "settings",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -8385,7 +8617,7 @@ dependencies = [
  "command_palette_hooks",
  "editor",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "project",
  "serde_json",
@@ -8393,8 +8625,8 @@ dependencies = [
  "theme",
  "title_bar",
  "ui",
- "util",
- "util_macros",
+ "util 0.1.0",
+ "util_macros 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -8405,10 +8637,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "client",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "release_channel",
  "smol",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -8663,7 +8895,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "log",
  "serde",
  "settings",
@@ -8704,10 +8936,10 @@ name = "json_schema_store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "dap",
  "extension",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "parking_lot",
  "paths",
@@ -8719,7 +8951,7 @@ dependencies = [
  "snippet_provider",
  "task",
  "theme",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -8820,14 +9052,14 @@ name = "keymap_editor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "command_palette",
  "component",
  "db",
  "editor",
  "fs",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "itertools 0.14.0",
  "json_schema_store",
  "language",
@@ -8847,7 +9079,7 @@ dependencies = [
  "tree-sitter-rust",
  "ui",
  "ui_input",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -8908,7 +9140,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clock",
- "collections",
+ "collections 0.1.0",
  "ctor",
  "diffy",
  "ec4rs",
@@ -8917,8 +9149,8 @@ dependencies = [
  "futures 0.3.31",
  "fuzzy",
  "globset",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "imara-diff",
  "indoc",
  "itertools 0.14.0",
@@ -8940,7 +9172,7 @@ dependencies = [
  "smol",
  "streaming-iterator",
  "strsim",
- "sum_tree",
+ "sum_tree 0.1.0",
  "task",
  "text",
  "theme",
@@ -8959,7 +9191,7 @@ dependencies = [
  "tree-sitter-typescript",
  "unicase",
  "unindent",
- "util",
+ "util 0.1.0",
  "watch",
  "zlog",
  "ztracing",
@@ -8971,11 +9203,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "collections",
+ "collections 0.1.0",
  "extension",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "log",
  "lsp",
@@ -8983,7 +9215,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
- "util",
+ "util 0.1.0",
  "ztracing",
 ]
 
@@ -8997,11 +9229,11 @@ dependencies = [
  "client",
  "cloud_api_types",
  "cloud_llm_client",
- "collections",
+ "collections 0.1.0",
  "credentials_provider",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "icons",
  "image",
  "log",
@@ -9015,7 +9247,7 @@ dependencies = [
  "settings",
  "smol",
  "thiserror 2.0.12",
- "util",
+ "util 0.1.0",
  "zed_env_vars",
 ]
 
@@ -9033,7 +9265,7 @@ dependencies = [
  "chrono",
  "client",
  "cloud_llm_client",
- "collections",
+ "collections 0.1.0",
  "component",
  "convert_case 0.8.0",
  "copilot",
@@ -9048,9 +9280,9 @@ dependencies = [
  "fs",
  "futures 0.3.31",
  "google_ai",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
- "http_client",
+ "http_client 0.1.0",
  "language",
  "language_model",
  "lmstudio",
@@ -9076,7 +9308,7 @@ dependencies = [
  "tokio",
  "ui",
  "ui_input",
- "util",
+ "util 0.1.0",
  "vercel",
  "x_ai",
 ]
@@ -9087,7 +9319,7 @@ version = "0.1.0"
 dependencies = [
  "db",
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "project",
  "ui",
  "workspace",
@@ -9102,13 +9334,13 @@ dependencies = [
  "file_finder",
  "file_icons",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "picker",
  "project",
  "settings",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -9118,12 +9350,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "client",
- "collections",
+ "collections 0.1.0",
  "command_palette_hooks",
  "edit_prediction",
  "editor",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "itertools 0.14.0",
  "language",
  "lsp",
@@ -9136,7 +9368,7 @@ dependencies = [
  "theme",
  "tree-sitter",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
  "zlog",
@@ -9152,11 +9384,11 @@ dependencies = [
  "async-tar",
  "async-trait",
  "chrono",
- "collections",
+ "collections 0.1.0",
  "futures 0.3.31",
  "globset",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "itertools 0.14.0",
  "json_schema_store",
  "language",
@@ -9209,7 +9441,7 @@ dependencies = [
  "tree-sitter-yaml",
  "unindent",
  "url",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -9381,12 +9613,12 @@ name = "line_ending_selector"
 version = "0.1.0"
 dependencies = [
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "picker",
  "project",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -9522,13 +9754,13 @@ dependencies = [
  "async-trait",
  "audio",
  "cocoa 0.26.0",
- "collections",
+ "collections 0.1.0",
  "core-foundation 0.10.0",
  "core-video",
  "coreaudio-rs 0.12.1",
  "cpal",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
  "http_client_tls",
  "image",
@@ -9550,7 +9782,7 @@ dependencies = [
  "smallvec",
  "tokio-tungstenite 0.26.2",
  "ui",
- "util",
+ "util 0.1.0",
  "zed-scap",
 ]
 
@@ -9571,7 +9803,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures 0.3.31",
- "http_client",
+ "http_client 0.1.0",
  "schemars",
  "serde",
  "serde_json",
@@ -9634,10 +9866,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-pipe",
- "collections",
+ "collections 0.1.0",
  "ctor",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "log",
  "lsp-types",
  "parking_lot",
@@ -9648,7 +9880,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smol",
- "util",
+ "util 0.1.0",
  "zlog",
 ]
 
@@ -9771,11 +10003,11 @@ version = "0.1.0"
 dependencies = [
  "assets",
  "base64 0.22.1",
- "collections",
+ "collections 0.1.0",
  "env_logger 0.11.8",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "languages",
  "linkify",
@@ -9783,10 +10015,10 @@ dependencies = [
  "node_runtime",
  "pulldown-cmark 0.13.0",
  "settings",
- "sum_tree",
+ "sum_tree 0.1.0",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -9795,10 +10027,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-recursion",
- "collections",
+ "collections 0.1.0",
  "editor",
  "fs",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "html5ever 0.27.0",
  "language",
  "linkify",
@@ -9810,7 +10042,7 @@ dependencies = [
  "theme",
  "ui",
  "urlencoding",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -9954,6 +10186,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "media"
+version = "0.1.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
+dependencies = [
+ "anyhow",
+ "bindgen 0.71.1",
+ "core-foundation 0.10.0",
+ "core-video",
+ "ctor",
+ "foreign-types 0.5.0",
+ "metal",
+ "objc",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9991,7 +10238,7 @@ dependencies = [
 name = "menu"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
 ]
 
 [[package]]
@@ -10036,7 +10283,7 @@ name = "migrator"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "convert_case 0.8.0",
  "log",
  "pretty_assertions",
@@ -10141,10 +10388,10 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 name = "miniprofiler_ui"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "serde_json",
  "smol",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -10204,7 +10451,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures 0.3.31",
- "http_client",
+ "http_client 0.1.0",
  "schemars",
  "serde",
  "serde_json",
@@ -10246,9 +10493,9 @@ dependencies = [
  "anyhow",
  "buffer_diff",
  "clock",
- "collections",
+ "collections 0.1.0",
  "ctor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "itertools 0.14.0",
  "language",
@@ -10262,12 +10509,12 @@ dependencies = [
  "settings",
  "smallvec",
  "smol",
- "sum_tree",
+ "sum_tree 0.1.0",
  "text",
  "theme",
  "tracing",
  "tree-sitter",
- "util",
+ "util 0.1.0",
  "zlog",
  "ztracing",
 ]
@@ -10456,14 +10703,14 @@ dependencies = [
  "async-tar",
  "async-trait",
  "futures 0.3.31",
- "http_client",
+ "http_client 0.1.0",
  "log",
  "paths",
  "semver",
  "serde",
  "serde_json",
  "smol",
- "util",
+ "util 0.1.0",
  "watch",
  "which 6.0.3",
 ]
@@ -10509,16 +10756,16 @@ dependencies = [
  "anyhow",
  "channel",
  "client",
- "collections",
+ "collections 0.1.0",
  "component",
  "db",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "rpc",
  "settings",
- "sum_tree",
+ "sum_tree 0.1.0",
  "time",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -10967,7 +11214,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures 0.3.31",
- "http_client",
+ "http_client 0.1.0",
  "schemars",
  "serde",
  "serde_json",
@@ -10985,7 +11232,7 @@ dependencies = [
  "documented",
  "fs",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "menu",
  "notifications",
  "picker",
@@ -10996,7 +11243,7 @@ dependencies = [
  "telemetry",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "vim_mode_setting",
  "workspace",
  "zed_actions",
@@ -11016,7 +11263,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3299dd401feaf1d45afd8fd1c0586f10fcfb22f244bb9afa942cec73503b89d"
 dependencies = [
  "aes",
- "ashpd",
+ "ashpd 0.12.1",
  "async-fs",
  "async-io",
  "async-lock 3.4.1",
@@ -11067,7 +11314,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures 0.3.31",
- "http_client",
+ "http_client 0.1.0",
  "log",
  "schemars",
  "serde",
@@ -11083,7 +11330,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures 0.3.31",
- "http_client",
+ "http_client 0.1.0",
  "schemars",
  "serde",
  "serde_json",
@@ -11223,7 +11470,7 @@ version = "0.1.0"
 dependencies = [
  "editor",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "language",
  "menu",
@@ -11238,7 +11485,7 @@ dependencies = [
  "tree-sitter-rust",
  "tree-sitter-typescript",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -11248,12 +11495,12 @@ name = "outline_panel"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "db",
  "editor",
  "file_icons",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "itertools 0.14.0",
  "language",
  "log",
@@ -11269,7 +11516,7 @@ dependencies = [
  "smol",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "worktree",
  "zed_actions",
@@ -11330,7 +11577,7 @@ name = "panel"
 version = "0.1.0"
 dependencies = [
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "settings",
  "theme",
  "ui",
@@ -11440,7 +11687,7 @@ version = "0.1.0"
 dependencies = [
  "dirs 4.0.0",
  "ignore",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -11537,7 +11784,17 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "perf"
 version = "0.1.0"
 dependencies = [
- "collections",
+ "collections 0.1.0",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "perf"
+version = "0.1.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
+dependencies = [
+ "collections 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "serde",
  "serde_json",
 ]
@@ -12052,7 +12309,7 @@ dependencies = [
  "ctor",
  "editor",
  "env_logger 0.11.8",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "menu",
  "schemars",
  "serde",
@@ -12328,9 +12585,9 @@ name = "prettier"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "fs",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "log",
  "lsp",
@@ -12339,7 +12596,7 @@ dependencies = [
  "paths",
  "serde",
  "serde_json",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -12490,7 +12747,7 @@ dependencies = [
  "circular-buffer",
  "client",
  "clock",
- "collections",
+ "collections 0.1.0",
  "context_server",
  "dap",
  "dap_adapters",
@@ -12505,8 +12762,8 @@ dependencies = [
  "git2",
  "git_hosting_providers",
  "globset",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "image",
  "indexmap",
  "itertools 0.14.0",
@@ -12536,7 +12793,7 @@ dependencies = [
  "smol",
  "snippet",
  "snippet_provider",
- "sum_tree",
+ "sum_tree 0.1.0",
  "task",
  "tempfile",
  "terminal",
@@ -12545,7 +12802,7 @@ dependencies = [
  "tracing",
  "unindent",
  "url",
- "util",
+ "util 0.1.0",
  "watch",
  "wax",
  "which 6.0.3",
@@ -12564,8 +12821,8 @@ dependencies = [
  "clap",
  "client",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "language",
  "node_runtime",
  "project",
@@ -12583,7 +12840,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "client",
- "collections",
+ "collections 0.1.0",
  "command_palette_hooks",
  "criterion",
  "db",
@@ -12591,7 +12848,7 @@ dependencies = [
  "file_icons",
  "git",
  "git_ui",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "itertools 0.14.0",
  "language",
  "menu",
@@ -12609,7 +12866,7 @@ dependencies = [
  "tempfile",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "worktree",
  "zed_actions",
@@ -12623,7 +12880,7 @@ dependencies = [
  "editor",
  "futures 0.3.31",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "lsp",
  "ordered-float 2.10.1",
@@ -12634,7 +12891,7 @@ dependencies = [
  "serde_json",
  "settings",
  "theme",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -12660,11 +12917,11 @@ dependencies = [
  "anyhow",
  "assets",
  "chrono",
- "collections",
+ "collections 0.1.0",
  "fs",
  "futures 0.3.31",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "handlebars 4.5.0",
  "heed",
  "language",
@@ -12676,7 +12933,7 @@ dependencies = [
  "strum 0.27.2",
  "tempfile",
  "text",
- "util",
+ "util 0.1.0",
  "uuid",
 ]
 
@@ -12791,7 +13048,7 @@ name = "proto"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "prost 0.9.0",
  "prost-build 0.9.0",
  "serde",
@@ -13262,8 +13519,8 @@ dependencies = [
  "fs",
  "futures 0.3.31",
  "fuzzy",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "indoc",
  "language",
  "log",
@@ -13286,7 +13543,7 @@ dependencies = [
  "telemetry",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "windows-registry 0.6.0",
  "workspace",
  "worktree",
@@ -13372,7 +13629,15 @@ dependencies = [
 name = "refineable"
 version = "0.1.0"
 dependencies = [
- "derive_refineable",
+ "derive_refineable 0.1.0",
+]
+
+[[package]]
+name = "refineable"
+version = "0.1.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
+dependencies = [
+ "derive_refineable 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
 ]
 
 [[package]]
@@ -13429,7 +13694,7 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 name = "release_channel"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "semver",
 ]
 
@@ -13440,10 +13705,10 @@ dependencies = [
  "anyhow",
  "askpass",
  "async-trait",
- "collections",
+ "collections 0.1.0",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "log",
  "parking_lot",
  "paths",
@@ -13459,7 +13724,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.12",
  "urlencoding",
- "util",
+ "util 0.1.0",
  "which 6.0.3",
 ]
 
@@ -13475,7 +13740,7 @@ dependencies = [
  "clap",
  "client",
  "clock",
- "collections",
+ "collections 0.1.0",
  "crash-handler",
  "crashes",
  "dap",
@@ -13491,9 +13756,9 @@ dependencies = [
  "git",
  "git2",
  "git_hosting_providers",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
- "http_client",
+ "http_client 0.1.0",
  "image",
  "json_schema_store",
  "language",
@@ -13528,7 +13793,7 @@ dependencies = [
  "thiserror 2.0.12",
  "toml 0.8.20",
  "unindent",
- "util",
+ "util 0.1.0",
  "watch",
  "workspace",
  "worktree",
@@ -13555,15 +13820,15 @@ dependencies = [
  "async-tungstenite 0.31.0",
  "base64 0.22.1",
  "client",
- "collections",
+ "collections 0.1.0",
  "command_palette_hooks",
  "editor",
  "env_logger 0.11.8",
  "feature_flags",
  "file_icons",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "image",
  "indoc",
  "jupyter-protocol 0.10.1",
@@ -13590,7 +13855,7 @@ dependencies = [
  "tree-sitter-python",
  "tree-sitter-typescript",
  "ui",
- "util",
+ "util 0.1.0",
  "uuid",
  "workspace",
 ]
@@ -13683,8 +13948,8 @@ dependencies = [
  "anyhow",
  "bytes 1.10.1",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "http_client_tls",
  "log",
  "regex",
@@ -13732,13 +13997,13 @@ name = "rich_text"
 version = "0.1.0"
 dependencies = [
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "linkify",
  "pulldown-cmark 0.13.0",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -13826,14 +14091,14 @@ dependencies = [
  "arrayvec",
  "criterion",
  "ctor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "log",
  "rand 0.9.1",
  "rayon",
- "sum_tree",
+ "sum_tree 0.1.0",
  "tracing",
  "unicode-segmentation",
- "util",
+ "util 0.1.0",
  "zlog",
  "ztracing",
 ]
@@ -13863,9 +14128,9 @@ dependencies = [
  "async-tungstenite 0.31.0",
  "base64 0.22.1",
  "chrono",
- "collections",
+ "collections 0.1.0",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "parking_lot",
  "proto",
  "rand 0.9.1",
@@ -13875,7 +14140,7 @@ dependencies = [
  "sha2",
  "strum 0.27.2",
  "tracing",
- "util",
+ "util 0.1.0",
  "zlog",
  "zstd",
 ]
@@ -13921,9 +14186,9 @@ name = "rules_library"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "language_model",
  "log",
@@ -13937,7 +14202,7 @@ dependencies = [
  "theme",
  "title_bar",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -14568,10 +14833,10 @@ dependencies = [
  "anyhow",
  "bitflags 2.9.0",
  "client",
- "collections",
+ "collections 0.1.0",
  "editor",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "itertools 0.14.0",
  "language",
  "lsp",
@@ -14587,8 +14852,8 @@ dependencies = [
  "tracing",
  "ui",
  "unindent",
- "util",
- "util_macros",
+ "util 0.1.0",
+ "util_macros 0.1.0",
  "workspace",
  "zed_actions",
  "ztracing",
@@ -14822,9 +15087,9 @@ name = "session"
 version = "0.1.0"
 dependencies = [
  "db",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "serde_json",
- "util",
+ "util 0.1.0",
  "uuid",
 ]
 
@@ -14833,11 +15098,11 @@ name = "settings"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "ec4rs",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "inventory",
  "log",
@@ -14855,7 +15120,7 @@ dependencies = [
  "settings_macros",
  "smallvec",
  "unindent",
- "util",
+ "util 0.1.0",
  "zlog",
 ]
 
@@ -14864,7 +15129,7 @@ name = "settings_content"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "derive_more 0.99.19",
  "log",
  "schemars",
@@ -14874,7 +15139,7 @@ dependencies = [
  "settings_json",
  "settings_macros",
  "strum 0.27.2",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -14890,7 +15155,7 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-json",
  "unindent",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -14909,7 +15174,7 @@ dependencies = [
  "client",
  "editor",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "menu",
  "picker",
@@ -14937,7 +15202,7 @@ dependencies = [
  "fs",
  "futures 0.3.31",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "heck 0.5.0",
  "itertools 0.14.0",
  "language",
@@ -14961,7 +15226,7 @@ dependencies = [
  "title_bar",
  "ui",
  "ui_input",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
  "zlog",
@@ -15239,11 +15504,11 @@ name = "snippet_provider"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "extension",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "log",
  "parking_lot",
@@ -15253,7 +15518,7 @@ dependencies = [
  "serde_json",
  "serde_json_lenient",
  "snippet",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -15263,13 +15528,13 @@ dependencies = [
  "file_finder",
  "file_icons",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "paths",
  "picker",
  "settings",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -15350,7 +15615,7 @@ name = "sqlez"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "futures 0.3.31",
  "indoc",
  "libsqlite3-sys",
@@ -15359,7 +15624,7 @@ dependencies = [
  "smol",
  "sqlformat",
  "thread_local",
- "util",
+ "util 0.1.0",
  "uuid",
 ]
 
@@ -15599,6 +15864,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
+name = "stacker"
+version = "0.1.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d74a23609d509411d10e2176dc2a4346e3b4aea2e7b1869f19fdedbc71c013"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "psm",
+ "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "stacksafe"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d9c1172965d317e87ddb6d364a040d958b40a1db82b6ef97da26253a8b3d090"
+dependencies = [
+ "stacker",
+ "stacksafe-macro",
+]
+
+[[package]]
+name = "stacksafe-macro"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "172175341049678163e979d9107ca3508046d4d2a7c6682bee46ac541b17db69"
+dependencies = [
+ "proc-macro-error2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15617,7 +15917,7 @@ dependencies = [
 name = "story"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "itertools 0.14.0",
  "smallvec",
 ]
@@ -15633,7 +15933,7 @@ dependencies = [
  "dialoguer",
  "editor",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "language",
  "log",
@@ -15663,7 +15963,7 @@ dependencies = [
  "ordered-float 2.10.1",
  "rand 0.9.1",
  "rope",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -15788,18 +16088,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sum_tree"
+version = "0.1.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
+dependencies = [
+ "arrayvec",
+ "log",
+ "rayon",
+ "tracing",
+]
+
+[[package]]
 name = "supermaven"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "client",
- "collections",
+ "collections 0.1.0",
  "edit_prediction_types",
  "editor",
  "env_logger 0.11.8",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "language",
  "log",
  "postage",
@@ -15813,7 +16124,7 @@ dependencies = [
  "theme",
  "ui",
  "unicode-segmentation",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -15822,12 +16133,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures 0.3.31",
- "http_client",
+ "http_client 0.1.0",
  "paths",
  "serde",
  "serde_json",
  "smol",
- "util",
+ "util 0.1.0",
 ]
 
 [[package]]
@@ -15919,7 +16230,7 @@ name = "svg_preview"
 version = "0.1.0"
 dependencies = [
  "file_icons",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "multi_buffer",
  "ui",
@@ -16293,7 +16604,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "client",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "human_bytes",
  "pciid-parser",
  "release_channel",
@@ -16307,11 +16618,11 @@ name = "tab_switcher"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "ctor",
  "editor",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "menu",
  "picker",
@@ -16323,7 +16634,7 @@ dependencies = [
  "smol",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zlog",
 ]
@@ -16387,9 +16698,9 @@ name = "task"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "hex",
  "log",
  "parking_lot",
@@ -16401,7 +16712,7 @@ dependencies = [
  "serde_json_lenient",
  "sha2",
  "shellexpand 2.1.2",
- "util",
+ "util 0.1.0",
  "zed_actions",
 ]
 
@@ -16410,11 +16721,11 @@ name = "tasks_ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "editor",
  "file_icons",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "itertools 0.14.0",
  "language",
  "menu",
@@ -16426,7 +16737,7 @@ dependencies = [
  "tree-sitter-rust",
  "tree-sitter-typescript",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -16489,9 +16800,9 @@ version = "0.1.0"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "itertools 0.14.0",
  "libc",
  "log",
@@ -16510,8 +16821,8 @@ dependencies = [
  "thiserror 2.0.12",
  "url",
  "urlencoding",
- "util",
- "util_macros",
+ "util 0.1.0",
+ "util_macros 0.1.0",
  "windows 0.61.1",
 ]
 
@@ -16534,12 +16845,12 @@ dependencies = [
  "async-recursion",
  "breadcrumbs",
  "client",
- "collections",
+ "collections 0.1.0",
  "db",
  "dirs 4.0.0",
  "editor",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "itertools 0.14.0",
  "language",
  "log",
@@ -16557,7 +16868,7 @@ dependencies = [
  "terminal",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -16568,10 +16879,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clock",
- "collections",
+ "collections 0.1.0",
  "ctor",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "log",
  "parking_lot",
  "postage",
@@ -16579,8 +16890,8 @@ dependencies = [
  "regex",
  "rope",
  "smallvec",
- "sum_tree",
- "util",
+ "sum_tree 0.1.0",
+ "util 0.1.0",
  "zlog",
 ]
 
@@ -16589,15 +16900,15 @@ name = "theme"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "collections",
+ "collections 0.1.0",
  "derive_more 0.99.19",
  "fs",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "log",
  "palette",
  "parking_lot",
- "refineable",
+ "refineable 0.1.0",
  "schemars",
  "serde",
  "serde_json",
@@ -16605,7 +16916,7 @@ dependencies = [
  "settings",
  "strum 0.27.2",
  "thiserror 2.0.12",
- "util",
+ "util 0.1.0",
  "uuid",
 ]
 
@@ -16616,7 +16927,7 @@ dependencies = [
  "anyhow",
  "extension",
  "fs",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "theme",
 ]
 
@@ -16626,8 +16937,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "collections",
- "gpui",
+ "collections 0.1.0",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indexmap",
  "log",
  "palette",
@@ -16646,7 +16957,7 @@ version = "0.1.0"
 dependencies = [
  "fs",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "log",
  "picker",
  "serde",
@@ -16654,7 +16965,7 @@ dependencies = [
  "telemetry",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
  "zed_actions",
 ]
@@ -16871,11 +17182,11 @@ dependencies = [
  "chrono",
  "client",
  "cloud_llm_client",
- "collections",
+ "collections 0.1.0",
  "db",
  "git_ui",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "menu",
  "notifications",
  "pretty_assertions",
@@ -16892,7 +17203,7 @@ dependencies = [
  "theme",
  "tree-sitter-md",
  "ui",
- "util",
+ "util 0.1.0",
  "windows 0.61.1",
  "workspace",
  "zed_actions",
@@ -17144,13 +17455,13 @@ dependencies = [
  "file_finder",
  "futures 0.3.31",
  "fuzzy",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "language",
  "menu",
  "picker",
  "project",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -17776,8 +18087,8 @@ dependencies = [
  "chrono",
  "component",
  "documented",
- "gpui",
- "gpui_macros",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "gpui_macros 0.1.0",
  "icons",
  "itertools 0.14.0",
  "menu",
@@ -17789,7 +18100,7 @@ dependencies = [
  "strum 0.27.2",
  "theme",
  "ui_macros",
- "util",
+ "util 0.1.0",
  "windows 0.61.1",
 ]
 
@@ -17799,7 +18110,7 @@ version = "0.1.0"
 dependencies = [
  "component",
  "editor",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "menu",
  "settings",
  "theme",
@@ -17820,7 +18131,7 @@ dependencies = [
 name = "ui_prompt"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "markdown",
  "menu",
  "settings",
@@ -18034,7 +18345,7 @@ dependencies = [
  "anyhow",
  "async-fs",
  "async_zip",
- "collections",
+ "collections 0.1.0",
  "command-fds",
  "dirs 4.0.0",
  "dunce",
@@ -18062,7 +18373,46 @@ dependencies = [
  "tempfile",
  "tendril",
  "unicase",
- "util_macros",
+ "util_macros 0.1.0",
+ "walkdir",
+ "which 6.0.3",
+]
+
+[[package]]
+name = "util"
+version = "0.1.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
+dependencies = [
+ "anyhow",
+ "async-fs",
+ "async_zip",
+ "collections 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "command-fds",
+ "dirs 4.0.0",
+ "dunce",
+ "futures 0.3.31",
+ "futures-lite 1.13.0",
+ "git2",
+ "globset",
+ "itertools 0.14.0",
+ "libc",
+ "log",
+ "mach2 0.5.0",
+ "nix 0.29.0",
+ "rand 0.9.1",
+ "regex",
+ "rust-embed",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_json_lenient",
+ "shlex",
+ "smol",
+ "take-until",
+ "tempfile",
+ "tendril",
+ "unicase",
+ "util_macros 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "walkdir",
  "which 6.0.3",
 ]
@@ -18071,7 +18421,17 @@ dependencies = [
 name = "util_macros"
 version = "0.1.0"
 dependencies = [
- "perf",
+ "perf 0.1.0",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "util_macros"
+version = "0.1.0"
+source = "git+https://github.com/Far-Beyond-Pulsar/WGPUI#a6b7b66c3930bd984edfa05a904d2accef80f57e"
+dependencies = [
+ "perf 0.1.0 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "quote",
  "syn 2.0.101",
 ]
@@ -18186,7 +18546,7 @@ dependencies = [
  "assets",
  "async-compat",
  "async-trait",
- "collections",
+ "collections 0.1.0",
  "command_palette",
  "command_palette_hooks",
  "db",
@@ -18195,7 +18555,7 @@ dependencies = [
  "futures 0.3.31",
  "fuzzy",
  "git_ui",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "indoc",
  "itertools 0.14.0",
  "language",
@@ -18207,7 +18567,7 @@ dependencies = [
  "nvim-rs",
  "outline_panel",
  "parking_lot",
- "perf",
+ "perf 0.1.0",
  "picker",
  "project",
  "project_panel",
@@ -18226,8 +18586,8 @@ dependencies = [
  "title_bar",
  "tokio",
  "ui",
- "util",
- "util_macros",
+ "util 0.1.0",
+ "util_macros 0.1.0",
  "vim_mode_setting",
  "workspace",
  "zed_actions",
@@ -18877,7 +19237,7 @@ version = "0.1.0"
 dependencies = [
  "ctor",
  "futures 0.3.31",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "parking_lot",
  "rand 0.9.1",
  "zlog",
@@ -18937,6 +19297,18 @@ dependencies = [
 
 [[package]]
 name = "wayland-protocols"
+version = "0.31.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f81f365b8b4a97f422ac0e8737c438024b5951734506b0e1d775c73030561f4"
+dependencies = [
+ "bitflags 2.9.0",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-scanner",
+]
+
+[[package]]
+name = "wayland-protocols"
 version = "0.32.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baeda9ffbcfc8cd6ddaade385eaf2393bd2115a69523c735f12242353c3df4f3"
@@ -18949,6 +19321,19 @@ dependencies = [
 
 [[package]]
 name = "wayland-protocols-plasma"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23803551115ff9ea9bce586860c5c5a971e360825a0309264102a9495a5ff479"
+dependencies = [
+ "bitflags 2.9.0",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols 0.31.2",
+ "wayland-scanner",
+]
+
+[[package]]
+name = "wayland-protocols-plasma"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa98634619300a535a9a97f338aed9a5ff1e01a461943e8346ff4ae26007306b"
@@ -18956,7 +19341,7 @@ dependencies = [
  "bitflags 2.9.0",
  "wayland-backend",
  "wayland-client",
- "wayland-protocols",
+ "wayland-protocols 0.32.10",
  "wayland-scanner",
 ]
 
@@ -18969,7 +19354,7 @@ dependencies = [
  "bitflags 2.9.0",
  "wayland-backend",
  "wayland-client",
- "wayland-protocols",
+ "wayland-protocols 0.32.10",
  "wayland-scanner",
 ]
 
@@ -19034,8 +19419,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cloud_llm_client",
- "collections",
- "gpui",
+ "collections 0.1.0",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "serde",
 ]
 
@@ -19047,8 +19432,8 @@ dependencies = [
  "client",
  "cloud_llm_client",
  "futures 0.3.31",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "language_model",
  "serde",
  "serde_json",
@@ -19134,12 +19519,12 @@ name = "which_key"
 version = "0.1.0"
 dependencies = [
  "command_palette",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "serde",
  "settings",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "workspace",
 ]
 
@@ -20135,7 +20520,7 @@ dependencies = [
  "call",
  "client",
  "clock",
- "collections",
+ "collections 0.1.0",
  "component",
  "dap",
  "db",
@@ -20143,8 +20528,8 @@ dependencies = [
  "fs",
  "futures 0.3.31",
  "git",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "itertools 0.14.0",
  "language",
  "log",
@@ -20169,7 +20554,7 @@ dependencies = [
  "tempfile",
  "theme",
  "ui",
- "util",
+ "util 0.1.0",
  "uuid",
  "windows 0.61.1",
  "zed_actions",
@@ -20184,15 +20569,15 @@ dependencies = [
  "async-lock 2.8.0",
  "chardetng",
  "clock",
- "collections",
+ "collections 0.1.0",
  "encoding_rs",
  "fs",
  "futures 0.3.31",
  "fuzzy",
  "git",
  "git2",
- "gpui",
- "http_client",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
+ "http_client 0.1.0",
  "ignore",
  "language",
  "log",
@@ -20207,10 +20592,10 @@ dependencies = [
  "settings",
  "smallvec",
  "smol",
- "sum_tree",
+ "sum_tree 0.1.0",
  "text",
  "tracing",
- "util",
+ "util 0.1.0",
  "zlog",
  "ztracing",
 ]
@@ -20220,7 +20605,7 @@ name = "worktree_benchmarks"
 version = "0.1.0"
 dependencies = [
  "fs",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "settings",
  "worktree",
 ]
@@ -20559,7 +20944,7 @@ dependencies = [
  "agent_ui",
  "agent_ui_v2",
  "anyhow",
- "ashpd",
+ "ashpd 0.12.1",
  "askpass",
  "assets",
  "audio",
@@ -20576,7 +20961,7 @@ dependencies = [
  "clock",
  "codestral",
  "collab_ui",
- "collections",
+ "collections 0.1.0",
  "command_palette",
  "component",
  "component_preview",
@@ -20609,9 +20994,9 @@ dependencies = [
  "git_hosting_providers",
  "git_ui",
  "go_to_line",
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "gpui_tokio",
- "http_client",
+ "http_client 0.1.0",
  "image",
  "image_viewer",
  "inspector_ui",
@@ -20696,7 +21081,7 @@ dependencies = [
  "ui_prompt",
  "url",
  "urlencoding",
- "util",
+ "util 0.1.0",
  "uuid",
  "vim",
  "vim_mode_setting",
@@ -20826,7 +21211,7 @@ dependencies = [
 name = "zed_actions"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "schemars",
  "serde",
  "uuid",
@@ -20836,7 +21221,7 @@ dependencies = [
 name = "zed_env_vars"
 version = "0.1.0"
 dependencies = [
- "gpui",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
 ]
 
 [[package]]
@@ -21081,7 +21466,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "collections",
+ "collections 0.1.0",
  "log",
  "tempfile",
 ]
@@ -21090,8 +21475,8 @@ dependencies = [
 name = "zlog_settings"
 version = "0.1.0"
 dependencies = [
- "collections",
- "gpui",
+ "collections 0.1.0",
+ "gpui 0.2.2 (git+https://github.com/Far-Beyond-Pulsar/WGPUI)",
  "settings",
  "zlog",
 ]
