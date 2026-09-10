@@ -2,6 +2,47 @@
 
 use std::any::Any;
 
+/// The application capability required by a GPUI context implementation.
+///
+/// This trait deliberately only exposes backend-neutral identifiers. The
+/// implementation owns the entity storage and remains free to choose its
+/// concrete handle types.
+pub trait AppContextSpi {
+    /// Returns whether an entity with the given identifier is currently stored
+    /// in this application context.
+    fn entity_exists(&self, entity_id: EntityId) -> bool;
+}
+
+/// The common contract exposed by every entity handle.
+pub trait EntityHandle {
+    /// Returns the identifier of the referenced entity.
+    fn entity_id(&self) -> EntityId;
+}
+
+/// The contract exposed by a strong, typed entity handle.
+pub trait StrongEntityHandle<T>: EntityHandle {
+    /// The corresponding weak handle type.
+    type Weak: WeakEntityHandle<T>;
+
+    /// Downgrades this handle without changing the entity's lifetime.
+    fn downgrade(&self) -> Self::Weak;
+}
+
+/// The contract exposed by a weak, typed entity handle.
+pub trait WeakEntityHandle<T>: EntityHandle {
+    /// The corresponding strong handle type.
+    type Strong: StrongEntityHandle<T>;
+
+    /// Attempts to upgrade this handle.
+    fn upgrade(&self) -> Option<Self::Strong>;
+}
+
+/// The cancellation contract exposed by a subscription.
+pub trait SubscriptionHandle {
+    /// Detaches the subscription while preserving its callback.
+    fn detach(self);
+}
+
 /// A global value that can be stored in an application context.
 pub trait Global: 'static {}
 

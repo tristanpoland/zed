@@ -1,6 +1,6 @@
 use scheduler::Instant;
 use std::{
-    any::{TypeId, type_name},
+    any::{Any, TypeId, type_name},
     cell::{BorrowMutError, Cell, Ref, RefCell, RefMut},
     ffi::OsString,
     marker::PhantomData,
@@ -41,8 +41,8 @@ pub use visual_test_context::*;
 use crate::InspectorElementRegistry;
 use crate::asset_cache::CachedLoad;
 use crate::{
-    Action, ActionBuildError, ActionRegistry, ActivityGuard, Any, AnyView, AnyWindowHandle,
-    AppContext, Arena, ArenaBox, Asset, AssetSource, BackgroundExecutor, Bounds, ClipboardItem,
+    Action, ActionBuildError, ActionRegistry, ActivityGuard, AnyView, AnyWindowHandle, AppContext,
+    Arena, ArenaBox, Asset, AssetSource, BackgroundExecutor, Bounds, ClipboardItem,
     ClipboardReadError, CursorStyle, DispatchPhase, DisplayId, EventEmitter, ExternalDragPayload,
     FocusHandle, FocusMap, ForegroundExecutor, Global, KeyBinding, KeyContext, Keymap, Keystroke,
     LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform, PlatformDisplay,

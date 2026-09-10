@@ -156,7 +156,7 @@ pub use queue::{PriorityQueueReceiver, PriorityQueueSender};
 pub use refineable::*;
 pub use scene::*;
 pub use shared_uri::*;
-use std::{any::Any, future::Future};
+use std::future::Future;
 pub use style::*;
 pub use styled::*;
 pub use subscription::*;
@@ -176,7 +176,7 @@ pub use pollster::block_on;
 
 /// The context trait, allows the different contexts in GPUI to be used
 /// interchangeably for certain operations.
-pub trait AppContext: AppContextSpi {
+pub trait AppContext {
     /// Create a new entity in the app context.
     #[expect(
         clippy::wrong_self_convention,
@@ -264,7 +264,7 @@ impl<T: 'static> Reservation<T> {
 
 /// This trait is used for the different visual contexts in GPUI that
 /// require a window to be present.
-pub trait VisualContext: AppContext + WindowContextSpi {
+pub trait VisualContext: AppContext {
     /// The result type for window operations.
     type Result<T>;
 

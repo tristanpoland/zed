@@ -88,6 +88,10 @@ impl EntityMap {
         Slot(Entity::new(id, Arc::downgrade(&self.ref_counts)))
     }
 
+    pub fn contains(&self, entity_id: EntityId) -> bool {
+        self.entities.contains_key(entity_id)
+    }
+
     /// Insert an entity into a slot obtained by calling `reserve`.
     pub fn insert<T>(&mut self, slot: Slot<T>, entity: T) -> Entity<T>
     where

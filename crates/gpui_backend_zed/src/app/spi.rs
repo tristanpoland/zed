@@ -1,48 +1,19 @@
-use crate::{AnyEntity, AnyWeakEntity, Entity, EntityId, Subscription, Task, WeakEntity};
+pub use gpui_types::{
+    AppContextSpi, EntityHandle, StrongEntityHandle, SubscriptionHandle, WeakEntityHandle,
+};
 
-/// The base SPI implemented by an application context provider.
-pub trait AppContextSpi: EntityContextSpi + GlobalContextSpi + TaskContextSpi {}
+use crate::{AnyEntity, AnyWeakEntity, App, Entity, EntityId, Subscription, Task, WeakEntity};
 
-/// The entity operations supplied by an application context provider.
-pub trait EntityContextSpi {}
-
-/// The global-state operations supplied by an application context provider.
-pub trait GlobalContextSpi {}
-
-/// The task operations supplied by an application context provider.
-pub trait TaskContextSpi {}
-
-/// The window operations supplied by an application context provider.
-pub trait WindowContextSpi: AppContextSpi {}
-
-impl<T: ?Sized> AppContextSpi for T where T: EntityContextSpi + GlobalContextSpi + TaskContextSpi {}
-impl<T: ?Sized> EntityContextSpi for T {}
-impl<T: ?Sized> GlobalContextSpi for T {}
-impl<T: ?Sized> TaskContextSpi for T {}
-impl<T: ?Sized> WindowContextSpi for T where T: AppContextSpi {}
-
-/// The common contract exposed by every entity handle.
-pub trait EntityHandle {
-    /// Returns the identifier of the referenced entity.
-    fn entity_id(&self) -> EntityId;
+/// The cancellation contract exposed by a scheduled task.
+pub trait TaskHandle<T> {
+    /// Detaches the task so it runs independently of this handle.
+    fn detach(self);
 }
 
-/// The contract exposed by a strong, typed entity handle.
-pub trait StrongEntityHandle<T>: EntityHandle {
-    /// The corresponding weak handle type.
-    type Weak: WeakEntityHandle<T>;
-
-    /// Downgrades this handle without changing the entity's lifetime.
-    fn downgrade(&self) -> Self::Weak;
-}
-
-/// The contract exposed by a weak, typed entity handle.
-pub trait WeakEntityHandle<T>: EntityHandle {
-    /// The corresponding strong handle type.
-    type Strong: StrongEntityHandle<T>;
-
-    /// Attempts to upgrade this handle.
-    fn upgrade(&self) -> Option<Self::Strong>;
+impl AppContextSpi for App {
+    fn entity_exists(&self, entity_id: EntityId) -> bool {
+        self.entities.contains(entity_id)
+    }
 }
 
 impl<T: 'static> EntityHandle for Entity<T> {
@@ -85,22 +56,10 @@ impl EntityHandle for AnyWeakEntity {
     }
 }
 
-/// The cancellation contract exposed by a scheduled task.
-pub trait TaskHandle<T> {
-    /// Detaches the task so it runs independently of this handle.
-    fn detach(self);
-}
-
 impl<T> TaskHandle<T> for Task<T> {
     fn detach(self) {
         Task::detach(self)
     }
-}
-
-/// The cancellation contract exposed by a subscription.
-pub trait SubscriptionHandle {
-    /// Detaches the subscription while preserving its callback.
-    fn detach(self);
 }
 
 impl SubscriptionHandle for Subscription {
@@ -108,3 +67,18 @@ impl SubscriptionHandle for Subscription {
         Subscription::detach(self)
     }
 }
+
+const _: () = {
+    const fn assert_app_context<T: AppContextSpi>() {}
+    const fn assert_entity_handle<T: EntityHandle>() {}
+    const fn assert_strong_entity_handle<T: StrongEntityHandle<()>>() {}
+    const fn assert_weak_entity_handle<T: WeakEntityHandle<()>>() {}
+
+    assert_app_context::<App>();
+    assert_entity_handle::<Entity<()>>();
+    assert_entity_handle::<WeakEntity<()>>();
+    assert_entity_handle::<AnyEntity>();
+    assert_entity_handle::<AnyWeakEntity>();
+    assert_strong_entity_handle::<Entity<()>>();
+    assert_weak_entity_handle::<WeakEntity<()>>();
+};
