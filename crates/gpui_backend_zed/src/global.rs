@@ -1,4 +1,4 @@
-use crate::{App, BorrowAppContext};
+use crate::{App, BorrowAppContext, Global};
 
 /// A marker trait for types that can be stored in GPUI's global state.
 ///
@@ -19,13 +19,6 @@ use crate::{App, BorrowAppContext};
 /// [`Global`] and holds the global state. Then create a newtype struct that wraps
 /// the global type and create custom accessor methods to expose the desired subset
 /// of operations.
-pub trait Global: 'static {
-    // This trait is intentionally left empty, by virtue of being a marker trait.
-    //
-    // Use additional traits with blanket implementations to attach functionality
-    // to types that implement `Global`.
-}
-
 /// A trait for reading a global value from the context.
 pub trait ReadGlobal {
     /// Returns the global instance of the implementing type.

@@ -140,6 +140,7 @@ macro_rules! bench_main {
     };
 }
 pub use gpui_shared_string::*;
+pub use gpui_types::{EventEmitter, Global};
 pub use gpui_util::arc_cow::ArcCow;
 pub use http_client;
 pub use input::*;
@@ -175,7 +176,7 @@ pub use pollster::block_on;
 
 /// The context trait, allows the different contexts in GPUI to be used
 /// interchangeably for certain operations.
-pub trait AppContext {
+pub trait AppContext: AppContextSpi {
     /// Create a new entity in the app context.
     #[expect(
         clippy::wrong_self_convention,
@@ -263,7 +264,7 @@ impl<T: 'static> Reservation<T> {
 
 /// This trait is used for the different visual contexts in GPUI that
 /// require a window to be present.
-pub trait VisualContext: AppContext {
+pub trait VisualContext: AppContext + WindowContextSpi {
     /// The result type for window operations.
     type Result<T>;
 
@@ -296,10 +297,6 @@ pub trait VisualContext: AppContext {
     where
         V: Focusable;
 }
-
-/// A trait for tying together the types of a GPUI entity and the events it can
-/// emit.
-pub trait EventEmitter<E: Any>: 'static {}
 
 /// A helper trait for auto-implementing certain methods on contexts that
 /// can be used interchangeably.

@@ -17,3 +17,4 @@ path = "src/gpui_types.rs"
 [dependencies]
 schemars.workspace = true
 serde.workspace = true
+slotmap.workspace = true

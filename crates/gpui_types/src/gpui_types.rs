@@ -1,5 +1,13 @@
 //! Backend-neutral data types used by GPUI APIs and implementations.
 
+use std::any::Any;
+
+/// A global value that can be stored in an application context.
+pub trait Global: 'static {}
+
+/// Associates an entity type with an event type it can emit.
+pub trait EventEmitter<E: Any>: 'static {}
+
 pub mod geometry {
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
@@ -329,7 +337,43 @@ pub mod platform {
     }
 }
 
+pub mod entity {
+    use slotmap::KeyData;
+    use std::fmt;
+    use std::num::NonZeroU64;
+
+    slotmap::new_key_type! {
+        /// A unique identifier for an entity across an application.
+        pub struct EntityId;
+    }
+
+    impl From<u64> for EntityId {
+        fn from(value: u64) -> Self {
+            Self(KeyData::from_ffi(value))
+        }
+    }
+
+    impl EntityId {
+        /// Converts this entity id to a [`NonZeroU64`].
+        pub fn as_non_zero_u64(self) -> NonZeroU64 {
+            NonZeroU64::new(self.0.as_ffi()).unwrap()
+        }
+
+        /// Converts this entity id to a `u64`.
+        pub fn as_u64(self) -> u64 {
+            self.0.as_ffi()
+        }
+    }
+
+    impl fmt::Display for EntityId {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(formatter, "{}", self.as_u64())
+        }
+    }
+}
+
 pub use color::*;
+pub use entity::*;
 pub use geometry::*;
 pub use input::*;
 pub use platform::*;

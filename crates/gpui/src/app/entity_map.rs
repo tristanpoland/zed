@@ -3,15 +3,14 @@ use anyhow::{Context as _, Result};
 use collections::FxHashSet;
 use derive_more::{Deref, DerefMut};
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use slotmap::{KeyData, SecondaryMap, SlotMap};
+use slotmap::{SecondaryMap, SlotMap};
 use std::{
     any::{Any, TypeId, type_name},
     cell::RefCell,
     cmp::Ordering,
-    fmt::{self, Display},
+    fmt,
     hash::{Hash, Hasher},
     marker::PhantomData,
-    num::NonZeroU64,
     sync::{
         Arc, Weak,
         atomic::{AtomicU64, AtomicUsize, Ordering::SeqCst},
@@ -24,34 +23,7 @@ use crate::util::atomic_incr_if_not_zero;
 #[cfg(any(test, feature = "leak-detection"))]
 use collections::HashMap;
 
-slotmap::new_key_type! {
-    /// A unique identifier for a entity across the application.
-    pub struct EntityId;
-}
-
-impl From<u64> for EntityId {
-    fn from(value: u64) -> Self {
-        Self(KeyData::from_ffi(value))
-    }
-}
-
-impl EntityId {
-    /// Converts this entity id to a [NonZeroU64]
-    pub fn as_non_zero_u64(self) -> NonZeroU64 {
-        NonZeroU64::new(self.0.as_ffi()).unwrap()
-    }
-
-    /// Converts this entity id to a [u64]
-    pub fn as_u64(self) -> u64 {
-        self.0.as_ffi()
-    }
-}
-
-impl Display for EntityId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_u64())
-    }
-}
+pub use gpui_types::EntityId;
 
 pub(crate) struct EntityMap {
     entities: SecondaryMap<EntityId, Box<dyn Any>>,

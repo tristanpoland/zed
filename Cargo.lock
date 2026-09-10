@@ -7504,6 +7504,7 @@ dependencies = [
  "gpui_macros",
  "gpui_platform",
  "gpui_shared_string",
+ "gpui_types",
  "gpui_util",
  "hdrhistogram",
  "heapless",
@@ -7802,6 +7803,7 @@ version = "0.2.2"
 dependencies = [
  "schemars 1.0.4",
  "serde",
+ "slotmap",
 ]
 
 [[package]]

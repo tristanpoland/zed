@@ -61,6 +61,8 @@ mod async_context;
 mod bench_context;
 mod context;
 mod entity_map;
+mod spi;
+pub use spi::*;
 #[cfg(any(test, feature = "test-support"))]
 mod headless_app_context;
 #[cfg(any(test, feature = "test-support"))]
