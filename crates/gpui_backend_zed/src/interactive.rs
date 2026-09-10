@@ -105,8 +105,7 @@ pub enum TouchPhase {
 ///
 /// The value is opaque and assigned by the platform. A platform window must
 /// not reuse an identifier for a later touch.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct TouchId(pub u64);
+pub use gpui_types::input::TouchId;
 
 /// A raw touch event from the platform.
 ///

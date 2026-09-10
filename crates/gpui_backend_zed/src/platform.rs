@@ -65,7 +65,7 @@ use std::ops;
 use std::time::Duration;
 use std::{
     ffi::OsString,
-    fmt::{self, Debug},
+    fmt::Debug,
     ops::Range,
     path::{Path, PathBuf},
     rc::Rc,
@@ -477,34 +477,7 @@ pub trait ScreenCaptureStream {
 /// A frame of video captured from a screen.
 pub struct ScreenCaptureFrame(pub PlatformScreenCaptureFrame);
 
-/// An opaque identifier for a hardware display
-#[derive(PartialEq, Eq, Hash, Copy, Clone)]
-pub struct DisplayId(pub(crate) u64);
-
-impl DisplayId {
-    /// Create a new `DisplayId` from a raw platform display identifier.
-    pub fn new(id: u64) -> Self {
-        Self(id)
-    }
-}
-
-impl From<u64> for DisplayId {
-    fn from(id: u64) -> Self {
-        Self(id)
-    }
-}
-
-impl From<DisplayId> for u64 {
-    fn from(id: DisplayId) -> Self {
-        id.0
-    }
-}
-
-impl Debug for DisplayId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "DisplayId({})", self.0)
-    }
-}
+pub use gpui_types::platform::DisplayId;
 
 /// Which part of the window to resize
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

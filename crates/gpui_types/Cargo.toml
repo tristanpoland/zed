@@ -1,0 +1,19 @@
+[package]
+name = "gpui_types"
+version = "0.2.2"
+edition.workspace = true
+authors = ["Nathan Sobo <nathan@zed.dev>"]
+description = "Backend-neutral data types shared by GPUI APIs and implementations"
+repository = "https://github.com/zed-industries/zed"
+license = "Apache-2.0"
+readme = "README.md"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/gpui_types.rs"
+
+[dependencies]
+schemars.workspace = true
+serde.workspace = true

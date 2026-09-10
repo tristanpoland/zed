@@ -779,9 +779,7 @@ impl From<PaintSurface> for Primitive {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[expect(missing_docs)]
-pub struct PathId(pub usize);
+pub use gpui_types::platform::PathId;
 
 /// A line made up of a series of vertices and control points.
 #[derive(Clone, Debug)]

@@ -80,6 +80,12 @@ pub mod private {
     pub use serde_json;
 }
 
+/// Data-only types staged for sharing between the public API and this implementation.
+#[doc(hidden)]
+pub mod types {
+    pub use gpui_types::{color, geometry, input, platform};
+}
+
 mod seal {
     /// A mechanism for restricting implementations of a trait to only those in GPUI.
     /// See: <https://predr.ag/blog/definitive-guide-to-sealed-traits-in-rust/>

@@ -29,8 +29,7 @@ impl AssetSource for () {
 }
 
 /// A unique identifier for the image cache
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct ImageId(pub usize);
+pub use gpui_types::platform::ImageId;
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 #[expect(missing_docs)]

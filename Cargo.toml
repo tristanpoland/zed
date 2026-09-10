@@ -90,6 +90,7 @@ members = [
     "crates/go_to_line",
     "crates/google_ai",
     "crates/gpui",
+    "crates/gpui_types",
     "crates/gpui_backend_zed",
     "crates/gpui_apple",
     "crates/gpui_linux",
@@ -360,6 +361,7 @@ go_to_line = { path = "crates/go_to_line" }
 google_ai = { path = "crates/google_ai" }
 gpui = { path = "crates/gpui", default-features = false }
 gpui_backend_zed = { path = "crates/gpui_backend_zed", default-features = false }
+gpui_types = { path = "crates/gpui_types" }
 gpui_apple = { path = "crates/gpui_apple" }
 gpui_linux = { path = "crates/gpui_linux", default-features = false }
 gpui_macos = { path = "crates/gpui_macos", default-features = false }
