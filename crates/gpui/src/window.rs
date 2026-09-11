@@ -13,7 +13,8 @@ use crate::{
     Hsla, InputHandler, IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke,
     KeystrokeEvent, LayoutId, LineLayoutIndex, Modifiers, ModifiersChangedEvent, MonochromeSprite,
     MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAtlas,
-    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PolychromeSprite,
+    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, PlatformWindowSpi, Point,
+    PolychromeSprite,
     Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams, RenderImage,
     RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
     SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow,
@@ -1281,6 +1282,34 @@ impl InputRateTracker {
     }
 }
 
+fn from_shared_point(point: gpui_types::Point<Pixels>) -> Point<Pixels> {
+    Point {
+        x: point.x,
+        y: point.y,
+    }
+}
+
+fn from_shared_size(size: gpui_types::Size<Pixels>) -> Size<Pixels> {
+    Size {
+        width: size.width,
+        height: size.height,
+    }
+}
+
+fn from_shared_bounds(bounds: gpui_types::Bounds<Pixels>) -> Bounds<Pixels> {
+    Bounds {
+        origin: from_shared_point(bounds.origin),
+        size: from_shared_size(bounds.size),
+    }
+}
+
+fn to_shared_size(size: Size<Pixels>) -> gpui_types::Size<Pixels> {
+    gpui_types::Size {
+        width: size.width,
+        height: size.height,
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum DrawPhase {
     None,
@@ -1558,18 +1587,26 @@ impl Window {
             SystemWindowTabController::add_tab(cx, handle.window_id(), tabs);
         }
 
-        let display_id = platform_window.display().map(|display| display.id());
+        let display_id =
+            PlatformWindowSpi::display(platform_window.as_ref()).map(|display| display.id());
         let sprite_atlas = platform_window.sprite_atlas();
-        let mouse_position = platform_window.mouse_position();
-        let modifiers = platform_window.modifiers();
-        let capslock = platform_window.capslock();
-        let content_size = platform_window.content_size();
-        let scale_factor = platform_window.scale_factor();
-        let appearance = platform_window.appearance();
+        let mouse_position = from_shared_point(PlatformWindowSpi::mouse_position(
+            platform_window.as_ref(),
+        ));
+        let modifiers = PlatformWindowSpi::modifiers(platform_window.as_ref());
+        let capslock = PlatformWindowSpi::capslock(platform_window.as_ref());
+        let content_size =
+            from_shared_size(PlatformWindowSpi::content_size(platform_window.as_ref()));
+        let scale_factor = PlatformWindowSpi::scale_factor(platform_window.as_ref());
+        let appearance = PlatformWindowSpi::appearance(platform_window.as_ref());
         let text_system = Arc::new(WindowTextSystem::new(cx.text_system().clone()));
         let invalidator = WindowInvalidator::new(handle.window_id());
-        let active = Rc::new(Cell::new(platform_window.is_active()));
-        let hovered = Rc::new(Cell::new(platform_window.is_hovered()));
+        let active = Rc::new(Cell::new(PlatformWindowSpi::is_active(
+            platform_window.as_ref(),
+        )));
+        let hovered = Rc::new(Cell::new(PlatformWindowSpi::is_hovered(
+            platform_window.as_ref(),
+        )));
         let needs_present = Rc::new(Cell::new(false));
         let next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>> = Default::default();
         let input_rate_tracker = Rc::new(RefCell::new(InputRateTracker::default()));
@@ -1577,11 +1614,13 @@ impl Window {
 
         platform_window
             .request_decorations(window_decorations.unwrap_or(WindowDecorations::Server));
-        platform_window.set_background_appearance(window_background);
+        PlatformWindowSpi::set_background_appearance(platform_window.as_ref(), window_background);
 
         match window_bounds {
-            WindowBounds::Fullscreen(_) => platform_window.toggle_fullscreen(),
-            WindowBounds::Maximized(_) => platform_window.zoom(),
+            WindowBounds::Fullscreen(_) => {
+                PlatformWindowSpi::toggle_fullscreen(platform_window.as_ref())
+            }
+            WindowBounds::Maximized(_) => PlatformWindowSpi::zoom(platform_window.as_ref()),
             WindowBounds::Windowed(_) => {}
         }
 
@@ -1669,7 +1708,7 @@ impl Window {
                 .detach();
         }
 
-        platform_window.on_close(Box::new({
+        PlatformWindowSpi::on_close(platform_window.as_ref(), Box::new({
             let window_id = handle.window_id();
             let mut cx = cx.to_async();
             move || {
@@ -1679,7 +1718,7 @@ impl Window {
                 });
             }
         }));
-        platform_window.on_request_frame(Box::new({
+        PlatformWindowSpi::on_request_frame(platform_window.as_ref(), Box::new({
             let mut cx = cx.to_async();
             let invalidator = invalidator.clone();
             let active = active.clone();
@@ -1746,7 +1785,7 @@ impl Window {
                         // Deferred by throttling: ask demand-driven platforms to retry.
                         handle
                             .update(&mut cx, |_, window, _| {
-                                window.platform_window.schedule_frame();
+                                PlatformWindowSpi::schedule_frame(window.platform_window.as_ref());
                             })
                             .log_err();
                         // The demand that entered this branch (a deferred forced
@@ -1803,7 +1842,7 @@ impl Window {
                         if window.invalidator.is_dirty()
                             || !window.next_frame_callbacks.borrow().is_empty()
                         {
-                            window.platform_window.schedule_frame();
+                            PlatformWindowSpi::schedule_frame(window.platform_window.as_ref());
                         }
                     })
                     .log_err();
@@ -1818,8 +1857,8 @@ impl Window {
                 }
             }
         }));
-        invalidator.set_platform_waker(platform_window.frame_waker());
-        platform_window.on_visual_viewport_changed(Box::new({
+        invalidator.set_platform_waker(PlatformWindowSpi::frame_waker(platform_window.as_ref()));
+        PlatformWindowSpi::on_visual_viewport_changed(platform_window.as_ref(), Box::new({
             let mut cx = cx.to_async();
             move || {
                 handle
@@ -1835,7 +1874,7 @@ impl Window {
                     .log_err();
             }
         }));
-        platform_window.on_resize(Box::new({
+        PlatformWindowSpi::on_resize(platform_window.as_ref(), Box::new({
             let mut cx = cx.to_async();
             move |_, _| {
                 handle
@@ -1843,7 +1882,7 @@ impl Window {
                     .log_err();
             }
         }));
-        platform_window.on_moved(Box::new({
+        PlatformWindowSpi::on_moved(platform_window.as_ref(), Box::new({
             let mut cx = cx.to_async();
             move || {
                 handle
@@ -1851,7 +1890,7 @@ impl Window {
                     .log_err();
             }
         }));
-        platform_window.on_appearance_changed(Box::new({
+        PlatformWindowSpi::on_appearance_changed(platform_window.as_ref(), Box::new({
             let cx = cx.to_async();
             let foreground_executor = cx.foreground_executor().clone();
             move || {
@@ -1867,7 +1906,7 @@ impl Window {
                     .detach();
             }
         }));
-        platform_window.on_button_layout_changed(Box::new({
+        PlatformWindowSpi::on_button_layout_changed(platform_window.as_ref(), Box::new({
             let mut cx = cx.to_async();
             move || {
                 handle
@@ -1875,14 +1914,16 @@ impl Window {
                     .log_err();
             }
         }));
-        platform_window.on_active_status_change(Box::new({
+        PlatformWindowSpi::on_active_status_change(platform_window.as_ref(), Box::new({
             let mut cx = cx.to_async();
             move |active| {
                 handle
                     .update(&mut cx, |_, window, cx| {
                         window.active.set(active);
-                        window.modifiers = window.platform_window.modifiers();
-                        window.capslock = window.platform_window.capslock();
+                        window.modifiers =
+                            PlatformWindowSpi::modifiers(window.platform_window.as_ref());
+                        window.capslock =
+                            PlatformWindowSpi::capslock(window.platform_window.as_ref());
                         window
                             .activation_observers
                             .clone()
@@ -1896,7 +1937,7 @@ impl Window {
                     .log_err();
             }
         }));
-        platform_window.on_hover_status_change(Box::new({
+        PlatformWindowSpi::on_hover_status_change(platform_window.as_ref(), Box::new({
             let mut cx = cx.to_async();
             move |active| {
                 handle
@@ -2295,7 +2336,7 @@ impl Window {
     ///
     /// On some platforms (namely Windows) this is different than the bounds being the size of the display
     pub fn is_maximized(&self) -> bool {
-        self.platform_window.is_maximized()
+        PlatformWindowSpi::is_maximized(self.platform_window.as_ref())
     }
 
     /// request a certain window decoration (Wayland)
@@ -2532,7 +2573,7 @@ impl Window {
     /// Schedule the given closure to be run directly after the current frame is rendered.
     pub fn on_next_frame(&self, callback: impl FnOnce(&mut Window, &mut App) + 'static) {
         RefCell::borrow_mut(&self.next_frame_callbacks).push(Box::new(callback));
-        self.platform_window.schedule_frame();
+        PlatformWindowSpi::schedule_frame(self.platform_window.as_ref());
         // Next-frame callbacks create frame demand without dirtying the
         // window, so the platform's frame source must be woken explicitly.
         self.invalidator.wake_platform();
@@ -2612,10 +2653,15 @@ impl Window {
     /// the platform window, then notifies observers. Normally called automatically
     /// by the platform's resize callback, but exposed publicly for test infrastructure.
     pub fn bounds_changed(&mut self, cx: &mut App) {
-        self.scale_factor = self.platform_window.scale_factor();
-        self.viewport_size = self.platform_window.content_size();
-        self.display_id = self.platform_window.display().map(|display| display.id());
-        self.mouse_position = self.platform_window.mouse_position();
+        self.scale_factor = PlatformWindowSpi::scale_factor(self.platform_window.as_ref());
+        self.viewport_size = from_shared_size(PlatformWindowSpi::content_size(
+            self.platform_window.as_ref(),
+        ));
+        self.display_id = PlatformWindowSpi::display(self.platform_window.as_ref())
+            .map(|display| display.id());
+        self.mouse_position = from_shared_point(PlatformWindowSpi::mouse_position(
+            self.platform_window.as_ref(),
+        ));
 
         self.platform_window.a11y_update_window_bounds();
         self.refresh();
@@ -2627,7 +2673,7 @@ impl Window {
 
     /// Returns the bounds of the current window in the global coordinate space, which could span across multiple displays.
     pub fn bounds(&self) -> Bounds<Pixels> {
-        self.platform_window.bounds()
+        from_shared_bounds(PlatformWindowSpi::bounds(self.platform_window.as_ref()))
     }
 
     /// Renders the current frame's scene to a texture and returns the pixel data as an RGBA image.
@@ -2650,12 +2696,12 @@ impl Window {
 
     /// Set the content size of the window.
     pub fn resize(&mut self, size: Size<Pixels>) {
-        self.platform_window.resize(size);
+        PlatformWindowSpi::resize(self.platform_window.as_mut(), to_shared_size(size));
     }
 
     /// Returns whether or not the window is currently fullscreen
     pub fn is_fullscreen(&self) -> bool {
-        self.platform_window.is_fullscreen()
+        PlatformWindowSpi::is_fullscreen(self.platform_window.as_ref())
     }
 
     /// Returns whether the window is currently in simple (borderless) fullscreen,
@@ -2666,7 +2712,7 @@ impl Window {
     }
 
     pub(crate) fn appearance_changed(&mut self, cx: &mut App) {
-        self.appearance = self.platform_window.appearance();
+        self.appearance = PlatformWindowSpi::appearance(self.platform_window.as_ref());
 
         self.appearance_observers
             .clone()
@@ -2695,7 +2741,9 @@ impl Window {
     /// During drawing this is a consistent frame snapshot. Outside drawing it
     /// reflects the latest platform sample, not a synchronous geometry query.
     pub fn visual_viewport_bounds(&self) -> Bounds<Pixels> {
-        self.platform_window.visual_viewport_bounds()
+        from_shared_bounds(PlatformWindowSpi::visual_viewport_bounds(
+            self.platform_window.as_ref(),
+        ))
     }
 
     /// Returns a conservative rectangle avoiding platform-known obscured content.
@@ -2721,12 +2769,12 @@ impl Window {
     /// Call from a user gesture on platforms that require one. The platform may
     /// decline the request; this does not change focus or the layout viewport.
     pub fn request_virtual_keyboard(&self) {
-        self.platform_window.show_soft_keyboard();
+        PlatformWindowSpi::show_soft_keyboard(self.platform_window.as_ref());
     }
 
     /// Requests dismissal of the virtual keyboard without changing GPUI focus.
     pub fn dismiss_virtual_keyboard(&self) {
-        self.platform_window.hide_soft_keyboard();
+        PlatformWindowSpi::hide_soft_keyboard(self.platform_window.as_ref());
     }
 
     /// Returns whether this window is focused by the operating system (receiving key events).
@@ -2751,7 +2799,7 @@ impl Window {
 
     /// Toggle zoom on the window.
     pub fn zoom_window(&self) {
-        self.platform_window.zoom();
+        PlatformWindowSpi::zoom(self.platform_window.as_ref());
     }
 
     /// Opens the native title bar context menu, useful when implementing client side decorations (Wayland and X11)
@@ -2800,7 +2848,7 @@ impl Window {
 
     /// Updates the window's title at the platform level.
     pub fn set_window_title(&mut self, title: &str) {
-        self.platform_window.set_title(title);
+        PlatformWindowSpi::set_title(self.platform_window.as_mut(), title);
         self.a11y.set_window_title(title.to_string());
     }
 
@@ -2817,8 +2865,10 @@ impl Window {
 
     /// Sets the window background appearance.
     pub fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance) {
-        self.platform_window
-            .set_background_appearance(background_appearance);
+        PlatformWindowSpi::set_background_appearance(
+            self.platform_window.as_ref(),
+            background_appearance,
+        );
     }
 
     /// Mark the window as dirty at the platform level.
@@ -3100,7 +3150,7 @@ impl Window {
         // This ensures that multiple test Apps have isolated arenas.
         let arena_scope = ElementArenaScope::enter(&cx.element_arena);
 
-        if self.platform_window.prepare_frame() {
+        if PlatformWindowSpi::prepare_frame(self.platform_window.as_ref()) {
             self.refresh();
         }
         self.invalidate_entities();
@@ -4572,11 +4622,13 @@ impl Window {
     }
 
     fn should_use_subpixel_rendering(&self, font_id: FontId, font_size: Pixels) -> bool {
-        if self.platform_window.background_appearance() != WindowBackgroundAppearance::Opaque {
+        if PlatformWindowSpi::background_appearance(self.platform_window.as_ref())
+            != WindowBackgroundAppearance::Opaque
+        {
             return false;
         }
 
-        if !self.platform_window.is_subpixel_rendering_supported() {
+        if !PlatformWindowSpi::is_subpixel_rendering_supported(self.platform_window.as_ref()) {
             return false;
         }
 
@@ -6253,22 +6305,22 @@ impl Window {
 
     /// Focus the current window and bring it to the foreground at the platform level.
     pub fn activate_window(&self) {
-        self.platform_window.activate();
+        PlatformWindowSpi::activate(self.platform_window.as_ref());
     }
 
     /// Requests that the operating system draw attention to this window.
     pub fn request_attention(&self) {
-        self.platform_window.request_attention();
+        PlatformWindowSpi::request_attention(self.platform_window.as_ref());
     }
 
     /// Minimize the current window at the platform level.
     pub fn minimize_window(&self) {
-        self.platform_window.minimize();
+        PlatformWindowSpi::minimize(self.platform_window.as_ref());
     }
 
     /// Toggle full screen status on the current window at the platform level.
     pub fn toggle_fullscreen(&self) {
-        self.platform_window.toggle_fullscreen();
+        PlatformWindowSpi::toggle_fullscreen(self.platform_window.as_ref());
     }
 
     /// Toggle simple (borderless) fullscreen, where the window covers the entire
@@ -6610,7 +6662,7 @@ impl Window {
     /// Request the OS to play an alert sound. On some platforms this is associated
     /// with the window, for others it's just a simple global function call.
     pub fn play_system_bell(&self) {
-        self.platform_window.play_system_bell()
+        PlatformWindowSpi::play_system_bell(self.platform_window.as_ref())
     }
 
     /// Returns whether accessibility features are active for this frame,
