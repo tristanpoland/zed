@@ -2,6 +2,7 @@ use crate::{App, AppContext, GpuiBorrow, VisualContext, Window, seal::Sealed};
 use anyhow::{Context as _, Result};
 use collections::FxHashSet;
 use derive_more::{Deref, DerefMut};
+use gpui_types::EntityStorageSpi;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use slotmap::{SecondaryMap, SlotMap};
 use std::{
@@ -92,6 +93,12 @@ impl EntityMap {
         self.entities.contains_key(entity_id)
     }
 
+    pub fn entity_type(&self, entity_id: EntityId) -> Option<TypeId> {
+        self.entities
+            .get(entity_id)
+            .map(|entity| entity.as_ref().type_id())
+    }
+
     /// Insert an entity into a slot obtained by calling `reserve`.
     pub fn insert<T>(&mut self, slot: Slot<T>, entity: T) -> Entity<T>
     where
@@ -176,6 +183,16 @@ impl EntityMap {
                 Some((entity_id, self.entities.remove(entity_id)?))
             })
             .collect()
+    }
+}
+
+impl EntityStorageSpi for EntityMap {
+    fn contains(&self, entity_id: EntityId) -> bool {
+        self.contains(entity_id)
+    }
+
+    fn entity_type(&self, entity_id: EntityId) -> Option<TypeId> {
+        self.entity_type(entity_id)
     }
 }
 

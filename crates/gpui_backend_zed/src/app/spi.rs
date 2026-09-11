@@ -1,5 +1,6 @@
 pub use gpui_types::{
-    AppContextSpi, EntityHandle, StrongEntityHandle, SubscriptionHandle, WeakEntityHandle,
+    AppContextSpi, EntityHandle, EntityStorageSpi, StrongEntityHandle, SubscriptionHandle,
+    WeakEntityHandle,
 };
 
 use crate::{AnyEntity, AnyWeakEntity, App, Entity, EntityId, Subscription, Task, WeakEntity};
@@ -11,8 +12,8 @@ pub trait TaskHandle<T> {
 }
 
 impl AppContextSpi for App {
-    fn entity_exists(&self, entity_id: EntityId) -> bool {
-        self.entities.contains(entity_id)
+    fn entity_storage(&self) -> &dyn EntityStorageSpi {
+        &self.entities
     }
 }
 

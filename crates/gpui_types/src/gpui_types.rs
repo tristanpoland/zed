@@ -1,16 +1,34 @@
 //! Backend-neutral data types used by GPUI APIs and implementations.
 
-use std::any::Any;
+use std::any::{Any, TypeId};
+
+/// The entity-storage capability required by a GPUI application context.
+///
+/// This is intentionally limited to metadata operations. Typed creation,
+/// reads, and updates still run through the public GPUI context methods so
+/// their callbacks can receive the implementation's real context type.
+pub trait EntityStorageSpi {
+    /// Returns whether an entity with the given identifier is stored.
+    fn contains(&self, entity_id: EntityId) -> bool;
+
+    /// Returns the concrete type stored for an entity, if it exists.
+    fn entity_type(&self, entity_id: EntityId) -> Option<TypeId>;
+}
 
 /// The application capability required by a GPUI context implementation.
 ///
-/// This trait deliberately only exposes backend-neutral identifiers. The
-/// implementation owns the entity storage and remains free to choose its
-/// concrete handle types.
+/// The implementation owns the entity storage and remains free to choose its
+/// concrete handle types. A backend can implement this trait without
+/// importing `gpui`.
 pub trait AppContextSpi {
+    /// Returns the entity-storage capability for this application context.
+    fn entity_storage(&self) -> &dyn EntityStorageSpi;
+
     /// Returns whether an entity with the given identifier is currently stored
     /// in this application context.
-    fn entity_exists(&self, entity_id: EntityId) -> bool;
+    fn entity_exists(&self, entity_id: EntityId) -> bool {
+        self.entity_storage().contains(entity_id)
+    }
 }
 
 /// The common contract exposed by every entity handle.
