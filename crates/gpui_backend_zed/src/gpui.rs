@@ -52,7 +52,6 @@ mod shared_uri;
 mod spring;
 mod style;
 mod styled;
-mod subscription;
 mod svg_renderer;
 mod tab_stop;
 mod taffy;
@@ -97,9 +96,9 @@ pub mod types {
         PlatformCredentialsSpi, PlatformCursorSpi, PlatformDisplaySpi, PlatformKeyboardLayoutSpi,
         PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi, PlatformServicesSpi,
         PlatformSystemNotificationSpi, PlatformTextInputSpi, PlatformUrlSpi, PlatformWindowSpi,
-        PlatformWindowingSpi, RequestFrameOptions, Role, StrongEntityHandle, SubscriptionHandle,
-        SystemNotification, SystemNotificationAction, SystemNotificationResponse, RuntimeSpi, Task,
-        TaskHandle,
+        PlatformWindowingSpi, RequestFrameOptions, Role, StrongEntityHandle, Subscription,
+        SubscriptionHandle, SystemNotification, SystemNotificationAction,
+        SystemNotificationResponse, RuntimeSpi, Task, TaskHandle,
         TextInputAction, TextInputConfiguration, TextInputStateChange, Tree, TreeId, TreeUpdate,
         UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle, WindowHandle, WindowId,
         WindowRootReadSpi, accessibility, clipboard,
@@ -193,7 +192,7 @@ pub use shared_uri::*;
 use std::future::Future;
 pub use style::*;
 pub use styled::*;
-pub use subscription::*;
+pub use gpui_types::{SubscriberSet, Subscription};
 pub use svg_renderer::*;
 pub(crate) use tab_stop::*;
 use taffy::TaffyLayoutEngine;

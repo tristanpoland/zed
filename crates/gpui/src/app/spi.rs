@@ -7,7 +7,7 @@ pub use gpui_types::{
 
 use crate::{
     AnyEntity, AnyView, AnyWeakEntity, AnyWindowHandle, App, AppContext, AsyncApp,
-    AsyncWindowContext, Context, Entity, EntityId, Reservation, Subscription, Task, WeakEntity,
+    AsyncWindowContext, Context, Entity, EntityId, Reservation, Task, WeakEntity,
     Window, WindowHandle,
 };
 
@@ -356,12 +356,6 @@ impl EntityHandle for AnyEntity {
 impl EntityHandle for AnyWeakEntity {
     fn entity_id(&self) -> EntityId {
         AnyWeakEntity::entity_id(self)
-    }
-}
-
-impl SubscriptionHandle for Subscription {
-    fn detach(self) {
-        Subscription::detach(self)
     }
 }
 

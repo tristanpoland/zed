@@ -862,12 +862,6 @@ impl EntityHandle for AnyWeakEntity {
     }
 }
 
-impl SubscriptionHandle for Subscription {
-    fn detach(self) {
-        Subscription::detach(self)
-    }
-}
-
 const _: () = {
     const fn assert_app_core<T: AppContextCore>() {}
     const fn assert_app_context<T: AppContextSpi>() {}
