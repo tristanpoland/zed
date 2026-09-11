@@ -1,13 +1,92 @@
 pub use gpui_types::{
     AppContextObserve, AppContextRead, AppContextSpawn, AppContextSpi, AppContextUpdate,
-    ContextObserve, ContextSpawn, EntityHandle, EntityStorageSpi, StrongEntityHandle,
-    SubscriptionHandle, TaskHandle, WeakEntityHandle,
+    AppContextWindow, ContextObserve, ContextSpawn, EntityHandle, EntityStorageSpi,
+    StrongEntityHandle, SubscriptionHandle, TaskHandle, VisualContextSpi, WeakEntityHandle,
 };
 
 use crate::{
-    AnyEntity, AnyWeakEntity, App, AsyncApp, AsyncWindowContext, Context, Entity, EntityId, Global,
-    Subscription, Task, WeakEntity,
+    AnyEntity, AnyView, AnyWeakEntity, AnyWindowHandle, App, AsyncApp, AsyncWindowContext, Context,
+    Entity, EntityId, Global, Subscription, Task, WeakEntity, Window, WindowHandle,
 };
+
+macro_rules! impl_app_context_window_spi {
+    ($context:ty, $($impl_generics:tt)*) => {
+        impl $($impl_generics)* AppContextWindow for $context {
+            type Entity<T> = Entity<T>;
+            type AnyView = AnyView;
+            type Window = Window;
+            type App = App;
+            type AnyWindowHandle = AnyWindowHandle;
+            type WindowHandle<T> = WindowHandle<T>;
+            type WindowResult<T> = crate::Result<T>;
+
+            fn spi_update_window<T, F>(
+                &mut self,
+                window: AnyWindowHandle,
+                update: F,
+            ) -> Self::WindowResult<T>
+            where
+                F: FnOnce(AnyView, &mut Window, &mut App) -> T,
+            {
+                <Self as crate::AppContext>::update_window(self, window, update)
+            }
+
+            fn spi_with_window<R>(
+                &mut self,
+                entity_id: EntityId,
+                update: impl FnOnce(&mut Window, &mut App) -> R,
+            ) -> Option<R> {
+                <Self as crate::AppContext>::with_window(self, entity_id, update)
+            }
+
+            fn spi_read_window<T, R>(
+                &self,
+                window: &WindowHandle<T>,
+                read: impl FnOnce(Entity<T>, &App) -> R,
+            ) -> Self::WindowResult<R>
+            where
+                T: 'static,
+            {
+                <Self as crate::AppContext>::read_window(self, window, read)
+            }
+        }
+    };
+}
+
+impl_app_context_window_spi!(App,);
+impl_app_context_window_spi!(AsyncApp,);
+impl_app_context_window_spi!(AsyncWindowContext,);
+impl_app_context_window_spi!(Context<'_, ContextEntity>, <ContextEntity>);
+
+impl VisualContextSpi for AsyncWindowContext {
+    type VisualResult<T> = crate::Result<T>;
+    type Context<'a, T> = Context<'a, T>;
+
+    fn spi_window_handle(&self) -> AnyWindowHandle {
+        <Self as crate::VisualContext>::window_handle(self)
+    }
+
+    fn spi_update_window_entity<T, R>(
+        &mut self,
+        entity: &Entity<T>,
+        update: impl FnOnce(&mut T, &mut Window, &mut Context<'_, T>) -> R,
+    ) -> Self::VisualResult<R>
+    where
+        T: 'static,
+    {
+        <Self as crate::VisualContext>::update_window_entity(self, entity, update)
+    }
+
+    fn spi_new_window_entity<T>(
+        &mut self,
+        build_entity: impl FnOnce(&mut Window, &mut Context<'_, T>) -> T,
+    ) -> Self::VisualResult<Entity<T>>
+    where
+        T: 'static,
+    {
+        <Self as crate::VisualContext>::new_window_entity(self, build_entity)
+    }
+}
 
 impl AppContextRead for App {
     type Entity<T> = Entity<T>;

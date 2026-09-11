@@ -84,10 +84,11 @@ pub mod private {
 pub mod types {
     pub use gpui_types::{
         AnyEntity, AnyWeakEntity, App, AppContextObserve, AppContextRead, AppContextRuntime,
-        AppContextSpawn, AppContextSpi, AppContextUpdate, Context, ContextObserve, ContextSpawn,
-        ContextSpi, Entity, EntityHandle, EntityHandleRuntime, EntityId, EntityReservation,
-        EntityStorageSpi, StrongEntityHandle, SubscriptionHandle, TaskHandle, WeakEntity,
-        WeakEntityHandle, color, geometry, input, platform,
+        AppContextSpawn, AppContextSpi, AppContextUpdate, AppContextWindow, Context,
+        ContextObserve, ContextSpawn, ContextSpi, Entity, EntityHandle, EntityHandleRuntime,
+        EntityId, EntityReservation, EntityStorageSpi, StrongEntityHandle, SubscriptionHandle,
+        TaskHandle, VisualContextSpi, WeakEntity, WeakEntityHandle, color, geometry, input,
+        platform,
     };
 }
 
@@ -181,7 +182,7 @@ pub use pollster::block_on;
 
 /// The context trait, allows the different contexts in GPUI to be used
 /// interchangeably for certain operations.
-pub trait AppContext {
+pub trait AppContext: gpui_types::AppContextWindow {
     /// Create a new entity in the app context.
     #[expect(
         clippy::wrong_self_convention,
@@ -269,7 +270,7 @@ impl<T: 'static> Reservation<T> {
 
 /// This trait is used for the different visual contexts in GPUI that
 /// require a window to be present.
-pub trait VisualContext: AppContext {
+pub trait VisualContext: AppContext + gpui_types::VisualContextSpi {
     /// The result type for window operations.
     type Result<T>;
 

@@ -77,6 +77,83 @@ pub trait AppContextUpdate: AppContextRead {
         G: Global + Default;
 }
 
+/// The window operations supplied by an application context implementation.
+///
+/// The concrete window, view, and handle types remain implementation-owned;
+/// this contract only describes how an app context exposes them to the
+/// backend-neutral API boundary.
+pub trait AppContextWindow {
+    /// The entity handle family used by this application context.
+    type Entity<T>;
+    /// The type-erased view passed to window update callbacks.
+    type AnyView;
+    /// The window type passed to window callbacks.
+    type Window;
+    /// The application context passed to window callbacks.
+    type App;
+    /// The type-erased window handle.
+    type AnyWindowHandle: Copy;
+    /// The typed window handle family.
+    type WindowHandle<T>;
+    /// The result returned by window operations.
+    type WindowResult<T>;
+
+    /// Updates a window and passes its root view to the callback.
+    fn spi_update_window<T, F>(
+        &mut self,
+        window: Self::AnyWindowHandle,
+        update: F,
+    ) -> Self::WindowResult<T>
+    where
+        F: FnOnce(Self::AnyView, &mut Self::Window, &mut Self::App) -> T;
+
+    /// Runs a callback against the current window for an entity, if available.
+    fn spi_with_window<R>(
+        &mut self,
+        entity_id: EntityId,
+        update: impl FnOnce(&mut Self::Window, &mut Self::App) -> R,
+    ) -> Option<R>;
+
+    /// Reads the typed root entity of a window.
+    fn spi_read_window<T, R>(
+        &self,
+        window: &Self::WindowHandle<T>,
+        read: impl FnOnce(Self::Entity<T>, &Self::App) -> R,
+    ) -> Self::WindowResult<R>
+    where
+        T: 'static;
+}
+
+/// The window/entity operations supplied by a visual context implementation.
+pub trait VisualContextSpi: AppContextWindow {
+    /// The result returned by visual-context operations.
+    type VisualResult<T>;
+    /// The entity context family supplied to visual callbacks.
+    type Context<'a, T>
+    where
+        Self: 'a;
+
+    /// Returns the window associated with this visual context.
+    fn spi_window_handle(&self) -> Self::AnyWindowHandle;
+
+    /// Updates an entity with access to its current window.
+    fn spi_update_window_entity<T, R>(
+        &mut self,
+        entity: &Self::Entity<T>,
+        update: impl FnOnce(&mut T, &mut Self::Window, &mut Self::Context<'_, T>) -> R,
+    ) -> Self::VisualResult<R>
+    where
+        T: 'static;
+
+    /// Creates an entity with access to this context's window.
+    fn spi_new_window_entity<T>(
+        &mut self,
+        build_entity: impl FnOnce(&mut Self::Window, &mut Self::Context<'_, T>) -> T,
+    ) -> Self::VisualResult<Self::Entity<T>>
+    where
+        T: 'static;
+}
+
 /// The global observation operations supplied by an application context.
 pub trait AppContextObserve {
     /// The application context passed to observation callbacks.
