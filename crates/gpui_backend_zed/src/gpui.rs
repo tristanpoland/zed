@@ -83,11 +83,11 @@ pub mod private {
 /// Backend-neutral public type definitions staged for the GPUI facade split.
 pub mod types {
     pub use gpui_types::{
-        AnyEntity, AnyWeakEntity, App, AppContextRead, AppContextRuntime, AppContextSpawn,
-        AppContextSpi, AppContextUpdate, Context, ContextObserve, ContextSpawn, ContextSpi, Entity,
-        EntityHandle, EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi,
-        StrongEntityHandle, SubscriptionHandle, TaskHandle, WeakEntity, WeakEntityHandle, color,
-        geometry, input, platform,
+        AnyEntity, AnyWeakEntity, App, AppContextObserve, AppContextRead, AppContextRuntime,
+        AppContextSpawn, AppContextSpi, AppContextUpdate, Context, ContextObserve, ContextSpawn,
+        ContextSpi, Entity, EntityHandle, EntityHandleRuntime, EntityId, EntityReservation,
+        EntityStorageSpi, StrongEntityHandle, SubscriptionHandle, TaskHandle, WeakEntity,
+        WeakEntityHandle, color, geometry, input, platform,
     };
 }
 

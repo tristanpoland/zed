@@ -1,5 +1,5 @@
 use super::{
-    EntityHandle, EntityId, SubscriptionHandle, TaskHandle,
+    EntityHandle, EntityId, Global, SubscriptionHandle, TaskHandle,
     entity::{Entity, EntityHandleRuntime, WeakEntity},
 };
 use std::{
@@ -32,6 +32,16 @@ pub trait AppContextRead {
     ) -> R
     where
         T: 'static;
+
+    /// Reads a global through the application context.
+    fn read_global<G, R>(&self, read: impl FnOnce(&G, &Self::App) -> R) -> R
+    where
+        G: Global;
+
+    /// Tries to read a global through the application context.
+    fn try_read_global<G, R>(&self, read: impl FnOnce(&G, &Self::App) -> R) -> Option<R>
+    where
+        G: Global;
 }
 
 /// The update operations supplied by an application context implementation.
@@ -49,6 +59,38 @@ pub trait AppContextUpdate: AppContextRead {
     ) -> R
     where
         T: 'static;
+
+    /// Updates a global through the application context.
+    fn update_global<G, R>(&mut self, update: impl FnOnce(&mut G, &mut Self::App) -> R) -> R
+    where
+        G: Global;
+
+    /// Sets a global through the application context.
+    fn set_global<G: Global>(&mut self, global: G);
+
+    /// Updates a global, assigning its default value when necessary.
+    fn update_default_global<G, R>(
+        &mut self,
+        update: impl FnOnce(&mut G, &mut Self::App) -> R,
+    ) -> R
+    where
+        G: Global + Default;
+}
+
+/// The global observation operations supplied by an application context.
+pub trait AppContextObserve {
+    /// The application context passed to observation callbacks.
+    type App;
+    /// The subscription handle returned by this context.
+    type Subscription: SubscriptionHandle;
+
+    /// Observes updates to a global through the application context.
+    fn observe_global<G>(
+        &mut self,
+        on_update: impl FnMut(&mut Self::App) + 'static,
+    ) -> Self::Subscription
+    where
+        G: Global;
 }
 
 /// The observation operations supplied by an entity context implementation.
@@ -67,6 +109,12 @@ pub trait ContextObserve<T> {
     where
         T: 'static,
         W: 'static;
+
+    /// Observes updates to a global through this entity context.
+    fn observe_global<G>(&mut self, on_update: impl FnMut(&mut T) + 'static) -> Self::Subscription
+    where
+        T: 'static,
+        G: 'static;
 }
 
 /// The foreground spawn operation supplied by an application context.

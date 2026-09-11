@@ -1,11 +1,11 @@
 pub use gpui_types::{
-    AppContextRead, AppContextSpawn, AppContextSpi, AppContextUpdate, ContextObserve, ContextSpawn,
-    EntityHandle, EntityStorageSpi, StrongEntityHandle, SubscriptionHandle, TaskHandle,
-    WeakEntityHandle,
+    AppContextObserve, AppContextRead, AppContextSpawn, AppContextSpi, AppContextUpdate,
+    ContextObserve, ContextSpawn, EntityHandle, EntityStorageSpi, StrongEntityHandle,
+    SubscriptionHandle, TaskHandle, WeakEntityHandle,
 };
 
 use crate::{
-    AnyEntity, AnyWeakEntity, App, AsyncApp, AsyncWindowContext, Context, Entity, EntityId,
+    AnyEntity, AnyWeakEntity, App, AsyncApp, AsyncWindowContext, Context, Entity, EntityId, Global,
     Subscription, Task, WeakEntity,
 };
 
@@ -18,6 +18,20 @@ impl AppContextRead for App {
         T: 'static,
     {
         <App as crate::AppContext>::read_entity(self, entity, read)
+    }
+
+    fn read_global<G, R>(&self, read: impl FnOnce(&G, &App) -> R) -> R
+    where
+        G: Global,
+    {
+        <App as crate::AppContext>::read_global(self, read)
+    }
+
+    fn try_read_global<G, R>(&self, read: impl FnOnce(&G, &App) -> R) -> Option<R>
+    where
+        G: Global,
+    {
+        self.try_global().map(|global| read(global, self))
     }
 }
 
@@ -34,6 +48,24 @@ impl AppContextUpdate for App {
     {
         <App as crate::AppContext>::update_entity(self, entity, update)
     }
+
+    fn update_global<G, R>(&mut self, update: impl FnOnce(&mut G, &mut App) -> R) -> R
+    where
+        G: Global,
+    {
+        crate::BorrowAppContext::update_global(self, update)
+    }
+
+    fn set_global<G: Global>(&mut self, global: G) {
+        crate::BorrowAppContext::set_global(self, global)
+    }
+
+    fn update_default_global<G, R>(&mut self, update: impl FnOnce(&mut G, &mut App) -> R) -> R
+    where
+        G: Global + Default,
+    {
+        crate::BorrowAppContext::update_default_global(self, update)
+    }
 }
 
 impl AppContextRead for AsyncApp {
@@ -45,6 +77,20 @@ impl AppContextRead for AsyncApp {
         T: 'static,
     {
         <AsyncApp as crate::AppContext>::read_entity(self, entity, read)
+    }
+
+    fn read_global<G, R>(&self, read: impl FnOnce(&G, &App) -> R) -> R
+    where
+        G: Global,
+    {
+        <AsyncApp as crate::AppContext>::read_global(self, read)
+    }
+
+    fn try_read_global<G, R>(&self, read: impl FnOnce(&G, &App) -> R) -> Option<R>
+    where
+        G: Global,
+    {
+        AsyncApp::try_read_global(self, read)
     }
 }
 
@@ -61,6 +107,24 @@ impl AppContextUpdate for AsyncApp {
     {
         <AsyncApp as crate::AppContext>::update_entity(self, entity, update)
     }
+
+    fn update_global<G, R>(&mut self, update: impl FnOnce(&mut G, &mut App) -> R) -> R
+    where
+        G: Global,
+    {
+        AsyncApp::update_global(self, update)
+    }
+
+    fn set_global<G: Global>(&mut self, global: G) {
+        self.update(|cx| cx.set_global(global));
+    }
+
+    fn update_default_global<G, R>(&mut self, update: impl FnOnce(&mut G, &mut App) -> R) -> R
+    where
+        G: Global + Default,
+    {
+        self.update(|cx| cx.update_default_global(update))
+    }
 }
 
 impl AppContextRead for AsyncWindowContext {
@@ -72,6 +136,20 @@ impl AppContextRead for AsyncWindowContext {
         T: 'static,
     {
         <AsyncWindowContext as crate::AppContext>::read_entity(self, entity, read)
+    }
+
+    fn read_global<G, R>(&self, read: impl FnOnce(&G, &App) -> R) -> R
+    where
+        G: Global,
+    {
+        <AsyncWindowContext as crate::AppContext>::read_global(self, read)
+    }
+
+    fn try_read_global<G, R>(&self, read: impl FnOnce(&G, &App) -> R) -> Option<R>
+    where
+        G: Global,
+    {
+        AsyncApp::try_read_global(self, read)
     }
 }
 
@@ -87,6 +165,60 @@ impl AppContextUpdate for AsyncWindowContext {
         T: 'static,
     {
         <AsyncWindowContext as crate::AppContext>::update_entity(self, entity, update)
+    }
+
+    fn update_global<G, R>(&mut self, update: impl FnOnce(&mut G, &mut App) -> R) -> R
+    where
+        G: Global,
+    {
+        AsyncApp::update_global(self, update)
+    }
+
+    fn set_global<G: Global>(&mut self, global: G) {
+        AsyncApp::update(self, |cx| cx.set_global(global));
+    }
+
+    fn update_default_global<G, R>(&mut self, update: impl FnOnce(&mut G, &mut App) -> R) -> R
+    where
+        G: Global + Default,
+    {
+        AsyncApp::update(self, |cx| cx.update_default_global(update))
+    }
+}
+
+impl AppContextObserve for App {
+    type App = App;
+    type Subscription = Subscription;
+
+    fn observe_global<G>(&mut self, on_update: impl FnMut(&mut App) + 'static) -> Self::Subscription
+    where
+        G: Global,
+    {
+        App::observe_global::<G>(self, on_update)
+    }
+}
+
+impl AppContextObserve for AsyncApp {
+    type App = App;
+    type Subscription = Subscription;
+
+    fn observe_global<G>(&mut self, on_update: impl FnMut(&mut App) + 'static) -> Self::Subscription
+    where
+        G: Global,
+    {
+        self.update(|cx| cx.observe_global::<G>(on_update))
+    }
+}
+
+impl AppContextObserve for AsyncWindowContext {
+    type App = App;
+    type Subscription = Subscription;
+
+    fn observe_global<G>(&mut self, on_update: impl FnMut(&mut App) + 'static) -> Self::Subscription
+    where
+        G: Global,
+    {
+        AsyncApp::update(self, |cx| cx.observe_global::<G>(on_update))
     }
 }
 
@@ -145,6 +277,14 @@ impl<T: 'static> ContextObserve<T> for Context<'_, T> {
         Context::observe(self, entity, move |state, entity, _context| {
             on_notify(state, entity)
         })
+    }
+
+    fn observe_global<G>(&mut self, on_update: impl FnMut(&mut T) + 'static) -> Self::Subscription
+    where
+        G: 'static,
+    {
+        let mut on_update = on_update;
+        Context::observe_global::<G>(self, move |state, _context| on_update(state))
     }
 }
 
@@ -222,6 +362,7 @@ impl<T> TaskHandle<T> for Task<T> {
 
 const _: () = {
     const fn assert_app_context<T: AppContextSpi>() {}
+    const fn assert_app_observe<T: AppContextObserve>() {}
     const fn assert_app_read<T: AppContextRead>() {}
     const fn assert_app_update<T: AppContextUpdate>() {}
     const fn assert_app_spawn<T: AppContextSpawn>() {}
@@ -233,6 +374,9 @@ const _: () = {
     const fn assert_task_handle<T: TaskHandle<()>>() {}
 
     assert_app_context::<App>();
+    assert_app_observe::<App>();
+    assert_app_observe::<AsyncApp>();
+    assert_app_observe::<AsyncWindowContext>();
     assert_app_read::<App>();
     assert_app_read::<AsyncApp>();
     assert_app_read::<AsyncWindowContext>();
