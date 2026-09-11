@@ -31,7 +31,7 @@ test-support = [
 bench-support = ["profiler", "dep:criterion"]
 # Preserve the published feature name while consumers migrate to `bench-support`.
 bench = ["bench-support"]
-inspector = ["gpui_macros/inspector"]
+inspector = ["gpui_macros/inspector", "gpui_types/inspector"]
 leak-detection = ["backtrace"]
 wayland = []
 x11 = [

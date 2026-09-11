@@ -13,6 +13,7 @@ workspace = true
 
 [features]
 test-support = []
+inspector = []
 
 [lib]
 path = "src/gpui_types.rs"
