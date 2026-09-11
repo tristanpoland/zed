@@ -123,9 +123,17 @@ pub trait Global: 'static {}
 pub trait EventEmitter<E: Any>: 'static {}
 
 pub mod geometry {
+    use anyhow::{Context as _, anyhow};
     use schemars::JsonSchema;
-    use serde::{Deserialize, Serialize};
-    use std::fmt::Debug;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+    use std::{
+        borrow::Cow,
+        cmp,
+        fmt::{self, Debug, Display},
+        hash::Hash,
+        iter::Sum,
+        ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub},
+    };
 
     /// An axis in two-dimensional space.
     #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -186,19 +194,17 @@ pub mod geometry {
     pub struct Percentage(pub f32);
 
     /// Logical pixels.
-    #[derive(
-        Copy, Clone, Debug, Default, PartialEq, PartialOrd, Serialize, Deserialize, JsonSchema,
-    )]
+    #[derive(Copy, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
     pub struct Pixels(pub f32);
 
     /// Device pixels.
     #[derive(
         Copy,
         Clone,
-        Debug,
         Default,
         PartialEq,
         Eq,
+        Hash,
         PartialOrd,
         Ord,
         Serialize,
@@ -208,15 +214,11 @@ pub mod geometry {
     pub struct DevicePixels(pub i32);
 
     /// Scaled logical pixels used by the paint protocol.
-    #[derive(
-        Copy, Clone, Debug, Default, PartialEq, PartialOrd, Serialize, Deserialize, JsonSchema,
-    )]
+    #[derive(Copy, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
     pub struct ScaledPixels(pub f32);
 
     /// Root-relative units.
-    #[derive(
-        Copy, Clone, Debug, Default, PartialEq, PartialOrd, Serialize, Deserialize, JsonSchema,
-    )]
+    #[derive(Copy, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
     pub struct Rems(pub f32);
 
     /// Construct a point.
@@ -286,6 +288,1081 @@ pub mod geometry {
                 left: value,
             }
         }
+    }
+
+    /// Supplies the root-relative pixel size required by rem conversions.
+    pub trait RemSizeProvider {
+        /// Returns the size of one rem in logical pixels.
+        fn rem_size(&self) -> Pixels;
+    }
+
+    impl Axis {
+        /// Returns the opposite axis.
+        pub fn invert(self) -> Self {
+            match self {
+                Self::Horizontal => Self::Vertical,
+                Self::Vertical => Self::Horizontal,
+            }
+        }
+    }
+
+    impl Add for Pixels {
+        type Output = Self;
+
+        fn add(self, other: Self) -> Self {
+            Self(self.0 + other.0)
+        }
+    }
+
+    impl AddAssign for Pixels {
+        fn add_assign(&mut self, other: Self) {
+            self.0 += other.0;
+        }
+    }
+
+    impl Sub for Pixels {
+        type Output = Self;
+
+        fn sub(self, other: Self) -> Self {
+            Self(self.0 - other.0)
+        }
+    }
+
+    impl std::ops::SubAssign for Pixels {
+        fn sub_assign(&mut self, other: Self) {
+            self.0 -= other.0;
+        }
+    }
+
+    impl Neg for Pixels {
+        type Output = Self;
+
+        fn neg(self) -> Self {
+            Self(-self.0)
+        }
+    }
+
+    impl Mul<f32> for Pixels {
+        type Output = Self;
+
+        fn mul(self, factor: f32) -> Self {
+            Self(self.0 * factor)
+        }
+    }
+
+    impl Mul<usize> for Pixels {
+        type Output = Self;
+
+        fn mul(self, factor: usize) -> Self {
+            self * factor as f32
+        }
+    }
+
+    impl Mul<Pixels> for f32 {
+        type Output = Pixels;
+
+        fn mul(self, pixels: Pixels) -> Pixels {
+            pixels * self
+        }
+    }
+
+    impl Mul<Pixels> for usize {
+        type Output = Pixels;
+
+        fn mul(self, pixels: Pixels) -> Pixels {
+            pixels * self
+        }
+    }
+
+    impl Div<f32> for Pixels {
+        type Output = Self;
+
+        fn div(self, divisor: f32) -> Self {
+            Self(self.0 / divisor)
+        }
+    }
+
+    impl Div for Pixels {
+        type Output = f32;
+
+        fn div(self, divisor: Self) -> f32 {
+            self.0 / divisor.0
+        }
+    }
+
+    impl DivAssign for Pixels {
+        fn div_assign(&mut self, divisor: Self) {
+            self.0 /= divisor.0;
+        }
+    }
+
+    impl MulAssign<f32> for Pixels {
+        fn mul_assign(&mut self, factor: f32) {
+            self.0 *= factor;
+        }
+    }
+
+    impl Rem for Pixels {
+        type Output = Self;
+
+        fn rem(self, divisor: Self) -> Self {
+            Self(self.0 % divisor.0)
+        }
+    }
+
+    impl RemAssign for Pixels {
+        fn rem_assign(&mut self, divisor: Self) {
+            self.0 %= divisor.0;
+        }
+    }
+
+    impl Display for Pixels {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(formatter, "{}px", self.0)
+        }
+    }
+
+    impl Debug for Pixels {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            Display::fmt(self, formatter)
+        }
+    }
+
+    impl Eq for Pixels {}
+
+    impl cmp::PartialOrd for Pixels {
+        fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    impl Ord for Pixels {
+        fn cmp(&self, other: &Self) -> cmp::Ordering {
+            self.0.total_cmp(&other.0)
+        }
+    }
+
+    impl Hash for Pixels {
+        fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+            self.0.to_bits().hash(state);
+        }
+    }
+
+    impl Sum for Pixels {
+        fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+            iter.fold(Self::ZERO, |total, value| total + value)
+        }
+    }
+
+    impl<'a> Sum<&'a Pixels> for Pixels {
+        fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+            iter.fold(Self::ZERO, |total, value| total + *value)
+        }
+    }
+
+    impl TryFrom<&str> for Pixels {
+        type Error = anyhow::Error;
+
+        fn try_from(value: &str) -> Result<Self, Self::Error> {
+            value
+                .strip_suffix("px")
+                .context("expected 'px' suffix")
+                .and_then(|number| Ok(number.parse()?))
+                .map(Self)
+        }
+    }
+
+    impl Pixels {
+        /// Represents zero pixels.
+        pub const ZERO: Self = Self(0.0);
+        /// The maximum representable pixel value.
+        pub const MAX: Self = Self(f32::MAX);
+        /// The minimum representable pixel value.
+        pub const MIN: Self = Self(f32::MIN);
+
+        /// Returns the raw value.
+        pub fn as_f32(self) -> f32 {
+            self.0
+        }
+
+        /// Rounds down to a whole pixel.
+        pub fn floor(&self) -> Self {
+            Self(self.0.floor())
+        }
+
+        /// Rounds to the nearest whole pixel.
+        pub fn round(&self) -> Self {
+            Self(self.0.round())
+        }
+
+        /// Rounds up to a whole pixel.
+        pub fn ceil(&self) -> Self {
+            Self(self.0.ceil())
+        }
+
+        /// Scales this value into scaled pixels.
+        pub fn scale(&self, factor: f32) -> ScaledPixels {
+            ScaledPixels(self.0 * factor)
+        }
+
+        /// Raises this value to a power.
+        pub fn pow(&self, exponent: f32) -> Self {
+            Self(self.0.powf(exponent))
+        }
+
+        /// Returns the absolute value.
+        pub fn abs(&self) -> Self {
+            Self(self.0.abs())
+        }
+
+        /// Returns the sign of this value.
+        pub fn signum(&self) -> f32 {
+            self.0.signum()
+        }
+
+        /// Converts this value to `f64`.
+        pub fn to_f64(self) -> f64 {
+            self.0 as f64
+        }
+    }
+
+    impl From<f64> for Pixels {
+        fn from(value: f64) -> Self {
+            Self(value as f32)
+        }
+    }
+
+    impl From<f32> for Pixels {
+        fn from(value: f32) -> Self {
+            Self(value)
+        }
+    }
+
+    impl From<Pixels> for f32 {
+        fn from(value: Pixels) -> Self {
+            value.0
+        }
+    }
+
+    impl From<&Pixels> for f32 {
+        fn from(value: &Pixels) -> Self {
+            value.0
+        }
+    }
+
+    impl From<Pixels> for f64 {
+        fn from(value: Pixels) -> Self {
+            value.0 as f64
+        }
+    }
+
+    impl From<Pixels> for u32 {
+        fn from(value: Pixels) -> Self {
+            value.0 as u32
+        }
+    }
+
+    impl From<&Pixels> for u32 {
+        fn from(value: &Pixels) -> Self {
+            value.0 as u32
+        }
+    }
+
+    impl From<u32> for Pixels {
+        fn from(value: u32) -> Self {
+            Self(value as f32)
+        }
+    }
+
+    impl From<Pixels> for usize {
+        fn from(value: Pixels) -> Self {
+            value.0 as usize
+        }
+    }
+
+    impl From<usize> for Pixels {
+        fn from(value: usize) -> Self {
+            Self(value as f32)
+        }
+    }
+
+    impl DevicePixels {
+        /// Converts this pixel count to a byte count.
+        pub fn to_bytes(self, bytes_per_pixel: u8) -> u32 {
+            self.0 as u32 * bytes_per_pixel as u32
+        }
+    }
+
+    impl Add for DevicePixels {
+        type Output = Self;
+
+        fn add(self, other: Self) -> Self {
+            Self(self.0 + other.0)
+        }
+    }
+
+    impl AddAssign for DevicePixels {
+        fn add_assign(&mut self, other: Self) {
+            self.0 += other.0;
+        }
+    }
+
+    impl Sub for DevicePixels {
+        type Output = Self;
+
+        fn sub(self, other: Self) -> Self {
+            Self(self.0 - other.0)
+        }
+    }
+
+    impl std::ops::SubAssign for DevicePixels {
+        fn sub_assign(&mut self, other: Self) {
+            self.0 -= other.0;
+        }
+    }
+
+    impl fmt::Debug for DevicePixels {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(formatter, "{} px (device)", self.0)
+        }
+    }
+
+    impl From<DevicePixels> for i32 {
+        fn from(value: DevicePixels) -> Self {
+            value.0
+        }
+    }
+
+    impl From<i32> for DevicePixels {
+        fn from(value: i32) -> Self {
+            Self(value)
+        }
+    }
+
+    impl From<u32> for DevicePixels {
+        fn from(value: u32) -> Self {
+            Self(value as i32)
+        }
+    }
+
+    impl From<DevicePixels> for u32 {
+        fn from(value: DevicePixels) -> Self {
+            value.0 as u32
+        }
+    }
+
+    impl From<DevicePixels> for u64 {
+        fn from(value: DevicePixels) -> Self {
+            value.0 as u64
+        }
+    }
+
+    impl From<u64> for DevicePixels {
+        fn from(value: u64) -> Self {
+            Self(value as i32)
+        }
+    }
+
+    impl From<DevicePixels> for usize {
+        fn from(value: DevicePixels) -> Self {
+            value.0 as usize
+        }
+    }
+
+    impl From<usize> for DevicePixels {
+        fn from(value: usize) -> Self {
+            Self(value as i32)
+        }
+    }
+
+    impl ScaledPixels {
+        /// Returns the raw value.
+        pub fn as_f32(self) -> f32 {
+            self.0
+        }
+
+        /// Rounds down to a whole pixel.
+        pub fn floor(&self) -> Self {
+            Self(self.0.floor())
+        }
+
+        /// Rounds to the nearest whole pixel.
+        pub fn round(&self) -> Self {
+            Self(self.0.round())
+        }
+
+        /// Rounds up to a whole pixel.
+        pub fn ceil(&self) -> Self {
+            Self(self.0.ceil())
+        }
+    }
+
+    impl Add for ScaledPixels {
+        type Output = Self;
+
+        fn add(self, other: Self) -> Self {
+            Self(self.0 + other.0)
+        }
+    }
+
+    impl AddAssign for ScaledPixels {
+        fn add_assign(&mut self, other: Self) {
+            self.0 += other.0;
+        }
+    }
+
+    impl Sub for ScaledPixels {
+        type Output = Self;
+
+        fn sub(self, other: Self) -> Self {
+            Self(self.0 - other.0)
+        }
+    }
+
+    impl std::ops::SubAssign for ScaledPixels {
+        fn sub_assign(&mut self, other: Self) {
+            self.0 -= other.0;
+        }
+    }
+
+    impl Eq for ScaledPixels {}
+
+    impl cmp::PartialOrd for ScaledPixels {
+        fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    impl Ord for ScaledPixels {
+        fn cmp(&self, other: &Self) -> cmp::Ordering {
+            self.0.total_cmp(&other.0)
+        }
+    }
+
+    impl fmt::Debug for ScaledPixels {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(formatter, "{}px (scaled)", self.0)
+        }
+    }
+
+    impl From<ScaledPixels> for DevicePixels {
+        fn from(value: ScaledPixels) -> Self {
+            Self(value.0.ceil() as i32)
+        }
+    }
+
+    impl From<DevicePixels> for ScaledPixels {
+        fn from(value: DevicePixels) -> Self {
+            Self(value.0 as f32)
+        }
+    }
+
+    impl From<ScaledPixels> for f64 {
+        fn from(value: ScaledPixels) -> Self {
+            value.0 as f64
+        }
+    }
+
+    impl From<ScaledPixels> for u32 {
+        fn from(value: ScaledPixels) -> Self {
+            value.0 as u32
+        }
+    }
+
+    impl From<f32> for ScaledPixels {
+        fn from(value: f32) -> Self {
+            Self(value)
+        }
+    }
+
+    impl Div for ScaledPixels {
+        type Output = f32;
+
+        fn div(self, divisor: Self) -> f32 {
+            self.0 / divisor.0
+        }
+    }
+
+    impl DivAssign for ScaledPixels {
+        fn div_assign(&mut self, divisor: Self) {
+            self.0 /= divisor.0;
+        }
+    }
+
+    impl Rem for ScaledPixels {
+        type Output = Self;
+
+        fn rem(self, divisor: Self) -> Self {
+            Self(self.0 % divisor.0)
+        }
+    }
+
+    impl RemAssign for ScaledPixels {
+        fn rem_assign(&mut self, divisor: Self) {
+            self.0 %= divisor.0;
+        }
+    }
+
+    impl Mul<f32> for ScaledPixels {
+        type Output = Self;
+
+        fn mul(self, factor: f32) -> Self {
+            Self(self.0 * factor)
+        }
+    }
+
+    impl Mul<usize> for ScaledPixels {
+        type Output = Self;
+
+        fn mul(self, factor: usize) -> Self {
+            self * factor as f32
+        }
+    }
+
+    impl Mul<ScaledPixels> for f32 {
+        type Output = ScaledPixels;
+
+        fn mul(self, pixels: ScaledPixels) -> ScaledPixels {
+            pixels * self
+        }
+    }
+
+    impl Mul<ScaledPixels> for usize {
+        type Output = ScaledPixels;
+
+        fn mul(self, pixels: ScaledPixels) -> ScaledPixels {
+            pixels * self
+        }
+    }
+
+    impl MulAssign<f32> for ScaledPixels {
+        fn mul_assign(&mut self, factor: f32) {
+            self.0 *= factor;
+        }
+    }
+
+    impl Rems {
+        /// A length of zero.
+        pub const ZERO: Self = Self(0.0);
+
+        /// Converts this value to pixels using the given root-relative size.
+        pub fn to_pixels(self, rem_size: Pixels) -> Pixels {
+            self * rem_size
+        }
+
+        /// Converts pixels to rems using a runtime-provided root-relative size.
+        pub fn from_pixels<T: RemSizeProvider>(length: Pixels, provider: &T) -> Self {
+            Self(length / provider.rem_size())
+        }
+    }
+
+    impl Mul<Pixels> for Rems {
+        type Output = Pixels;
+
+        fn mul(self, pixels: Pixels) -> Pixels {
+            Pixels(self.0 * pixels.0)
+        }
+    }
+
+    impl AddAssign for Rems {
+        fn add_assign(&mut self, other: Self) {
+            self.0 += other.0;
+        }
+    }
+
+    impl Add for Rems {
+        type Output = Self;
+
+        fn add(self, other: Self) -> Self {
+            Self(self.0 + other.0)
+        }
+    }
+
+    impl Sub for Rems {
+        type Output = Self;
+
+        fn sub(self, other: Self) -> Self {
+            Self(self.0 - other.0)
+        }
+    }
+
+    impl Mul for Rems {
+        type Output = Self;
+
+        fn mul(self, factor: Self) -> Self {
+            Self(self.0 * factor.0)
+        }
+    }
+
+    impl Mul<f32> for Rems {
+        type Output = Self;
+
+        fn mul(self, factor: f32) -> Self {
+            Self(self.0 * factor)
+        }
+    }
+
+    impl Div for Rems {
+        type Output = Self;
+
+        fn div(self, divisor: Self) -> Self {
+            Self(self.0 / divisor.0)
+        }
+    }
+
+    impl Neg for Rems {
+        type Output = Self;
+
+        fn neg(self) -> Self {
+            Self(-self.0)
+        }
+    }
+
+    impl Display for Rems {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(formatter, "{}rem", self.0)
+        }
+    }
+
+    impl Debug for Rems {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            Display::fmt(self, formatter)
+        }
+    }
+
+    impl TryFrom<&str> for Rems {
+        type Error = anyhow::Error;
+
+        fn try_from(value: &str) -> Result<Self, Self::Error> {
+            value
+                .strip_suffix("rem")
+                .context("expected 'rem' suffix")
+                .and_then(|number| Ok(number.parse()?))
+                .map(Self)
+        }
+    }
+
+    /// An absolute length in pixels or rems.
+    #[derive(Clone, Copy, PartialEq)]
+    pub enum AbsoluteLength {
+        /// A length in pixels.
+        Pixels(Pixels),
+        /// A length in rems.
+        Rems(Rems),
+    }
+
+    impl AbsoluteLength {
+        /// Returns whether this length is zero.
+        pub fn is_zero(&self) -> bool {
+            match self {
+                Self::Pixels(pixels) => pixels.0 == 0.0,
+                Self::Rems(rems) => rems.0 == 0.0,
+            }
+        }
+
+        /// Converts this length to pixels.
+        pub fn to_pixels(self, rem_size: Pixels) -> Pixels {
+            match self {
+                Self::Pixels(pixels) => pixels,
+                Self::Rems(rems) => rems.to_pixels(rem_size),
+            }
+        }
+
+        /// Converts this length to rems.
+        pub fn to_rems(self, rem_size: Pixels) -> Rems {
+            match self {
+                Self::Pixels(pixels) => Rems(pixels.0 / rem_size.0),
+                Self::Rems(rems) => rems,
+            }
+        }
+    }
+
+    impl Neg for AbsoluteLength {
+        type Output = Self;
+
+        fn neg(self) -> Self {
+            match self {
+                Self::Pixels(pixels) => Self::Pixels(-pixels),
+                Self::Rems(rems) => Self::Rems(-rems),
+            }
+        }
+    }
+
+    impl From<Pixels> for AbsoluteLength {
+        fn from(value: Pixels) -> Self {
+            Self::Pixels(value)
+        }
+    }
+
+    impl From<Rems> for AbsoluteLength {
+        fn from(value: Rems) -> Self {
+            Self::Rems(value)
+        }
+    }
+
+    impl Default for AbsoluteLength {
+        fn default() -> Self {
+            px(0.0).into()
+        }
+    }
+
+    impl Display for AbsoluteLength {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::Pixels(pixels) => write!(formatter, "{pixels}"),
+                Self::Rems(rems) => write!(formatter, "{rems}"),
+            }
+        }
+    }
+
+    impl Debug for AbsoluteLength {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            Display::fmt(self, formatter)
+        }
+    }
+
+    impl TryFrom<&str> for AbsoluteLength {
+        type Error = anyhow::Error;
+
+        fn try_from(value: &str) -> Result<Self, Self::Error> {
+            if let Ok(pixels) = value.try_into() {
+                Ok(Self::Pixels(pixels))
+            } else if let Ok(rems) = value.try_into() {
+                Ok(Self::Rems(rems))
+            } else {
+                Err(anyhow!(
+                    "invalid AbsoluteLength '{value}', expected number with 'px' or 'rem' suffix"
+                ))
+            }
+        }
+    }
+
+    impl JsonSchema for AbsoluteLength {
+        fn schema_name() -> Cow<'static, str> {
+            "AbsoluteLength".into()
+        }
+
+        fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+            schemars::json_schema!({
+                "type": "string",
+                "pattern": r"^-?\d+(\.\d+)?(px|rem)$"
+            })
+        }
+    }
+
+    impl<'de> Deserialize<'de> for AbsoluteLength {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            struct StringVisitor;
+
+            impl de::Visitor<'_> for StringVisitor {
+                type Value = AbsoluteLength;
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("number with 'px' or 'rem' suffix")
+                }
+
+                fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                    AbsoluteLength::try_from(value).map_err(E::custom)
+                }
+            }
+
+            deserializer.deserialize_str(StringVisitor)
+        }
+    }
+
+    impl Serialize for AbsoluteLength {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.serialize_str(&format!("{self}"))
+        }
+    }
+
+    /// A non-auto length in pixels, rems, or a parent-relative fraction.
+    #[derive(Clone, Copy, PartialEq)]
+    pub enum DefiniteLength {
+        /// An absolute length.
+        Absolute(AbsoluteLength),
+        /// A fraction of the parent's size.
+        Fraction(f32),
+    }
+
+    impl DefiniteLength {
+        /// Converts this length to pixels.
+        pub fn to_pixels(self, base_size: AbsoluteLength, rem_size: Pixels) -> Pixels {
+            match self {
+                Self::Absolute(length) => length.to_pixels(rem_size),
+                Self::Fraction(fraction) => match base_size {
+                    AbsoluteLength::Pixels(pixels) => pixels * fraction,
+                    AbsoluteLength::Rems(rems) => rems * rem_size * fraction,
+                },
+            }
+        }
+
+        /// Returns whether this length is zero.
+        pub fn is_zero(&self) -> bool {
+            match self {
+                Self::Absolute(length) => length.is_zero(),
+                Self::Fraction(fraction) => *fraction == 0.0,
+            }
+        }
+    }
+
+    impl Neg for DefiniteLength {
+        type Output = Self;
+
+        fn neg(self) -> Self {
+            match self {
+                Self::Absolute(length) => Self::Absolute(-length),
+                Self::Fraction(fraction) => Self::Fraction(-fraction),
+            }
+        }
+    }
+
+    impl Debug for DefiniteLength {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            Display::fmt(self, formatter)
+        }
+    }
+
+    impl Display for DefiniteLength {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::Absolute(length) => write!(formatter, "{length}"),
+                Self::Fraction(fraction) => write!(formatter, "{}%", (fraction * 100.0) as i32),
+            }
+        }
+    }
+
+    impl TryFrom<&str> for DefiniteLength {
+        type Error = anyhow::Error;
+
+        fn try_from(value: &str) -> Result<Self, Self::Error> {
+            if let Some(percentage) = value.strip_suffix('%') {
+                let fraction = percentage.parse::<f32>().with_context(|| {
+                    format!("invalid DefiniteLength '{value}', expected number with 'px', 'rem', or '%' suffix")
+                })?;
+                Ok(Self::Fraction(fraction / 100.0))
+            } else if let Ok(absolute_length) = value.try_into() {
+                Ok(Self::Absolute(absolute_length))
+            } else {
+                Err(anyhow!(
+                    "invalid DefiniteLength '{value}', expected number with 'px', 'rem', or '%' suffix"
+                ))
+            }
+        }
+    }
+
+    impl JsonSchema for DefiniteLength {
+        fn schema_name() -> Cow<'static, str> {
+            "DefiniteLength".into()
+        }
+
+        fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+            schemars::json_schema!({
+                "type": "string",
+                "pattern": r"^-?\d+(\.\d+)?(px|rem|%)$"
+            })
+        }
+    }
+
+    impl<'de> Deserialize<'de> for DefiniteLength {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            struct StringVisitor;
+
+            impl de::Visitor<'_> for StringVisitor {
+                type Value = DefiniteLength;
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("number with 'px', 'rem', or '%' suffix")
+                }
+
+                fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                    DefiniteLength::try_from(value).map_err(E::custom)
+                }
+            }
+
+            deserializer.deserialize_str(StringVisitor)
+        }
+    }
+
+    impl Serialize for DefiniteLength {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.serialize_str(&format!("{self}"))
+        }
+    }
+
+    impl From<Pixels> for DefiniteLength {
+        fn from(value: Pixels) -> Self {
+            Self::Absolute(value.into())
+        }
+    }
+
+    impl From<Rems> for DefiniteLength {
+        fn from(value: Rems) -> Self {
+            Self::Absolute(value.into())
+        }
+    }
+
+    impl From<AbsoluteLength> for DefiniteLength {
+        fn from(value: AbsoluteLength) -> Self {
+            Self::Absolute(value)
+        }
+    }
+
+    impl Default for DefiniteLength {
+        fn default() -> Self {
+            Self::Absolute(AbsoluteLength::default())
+        }
+    }
+
+    /// A length in pixels, rems, a parent-relative fraction, or auto.
+    #[derive(Clone, Copy, PartialEq)]
+    pub enum Length {
+        /// A definite length.
+        Definite(DefiniteLength),
+        /// An automatic length.
+        Auto,
+    }
+
+    impl Length {
+        /// Returns whether this length is zero.
+        pub fn is_zero(&self) -> bool {
+            match self {
+                Self::Definite(length) => length.is_zero(),
+                Self::Auto => false,
+            }
+        }
+    }
+
+    impl Neg for Length {
+        type Output = Self;
+
+        fn neg(self) -> Self {
+            match self {
+                Self::Definite(length) => Self::Definite(-length),
+                Self::Auto => Self::Auto,
+            }
+        }
+    }
+
+    impl Debug for Length {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            Display::fmt(self, formatter)
+        }
+    }
+
+    impl Display for Length {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::Definite(length) => write!(formatter, "{length}"),
+                Self::Auto => formatter.write_str("auto"),
+            }
+        }
+    }
+
+    impl TryFrom<&str> for Length {
+        type Error = anyhow::Error;
+
+        fn try_from(value: &str) -> Result<Self, Self::Error> {
+            if value == "auto" {
+                Ok(Self::Auto)
+            } else if let Ok(definite_length) = value.try_into() {
+                Ok(Self::Definite(definite_length))
+            } else {
+                Err(anyhow!(
+                    "invalid Length '{value}', expected 'auto' or number with 'px', 'rem', or '%' suffix"
+                ))
+            }
+        }
+    }
+
+    impl JsonSchema for Length {
+        fn schema_name() -> Cow<'static, str> {
+            "Length".into()
+        }
+
+        fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+            schemars::json_schema!({
+                "type": "string",
+                "pattern": r"^(auto|-?\d+(\.\d+)?(px|rem|%))$"
+            })
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Length {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            struct StringVisitor;
+
+            impl de::Visitor<'_> for StringVisitor {
+                type Value = Length;
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("'auto' or number with 'px', 'rem', or '%' suffix")
+                }
+
+                fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                    Length::try_from(value).map_err(E::custom)
+                }
+            }
+
+            deserializer.deserialize_str(StringVisitor)
+        }
+    }
+
+    impl Serialize for Length {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.serialize_str(&format!("{self}"))
+        }
+    }
+
+    impl Default for Length {
+        fn default() -> Self {
+            Self::Definite(DefiniteLength::default())
+        }
+    }
+
+    impl From<Pixels> for Length {
+        fn from(value: Pixels) -> Self {
+            Self::Definite(value.into())
+        }
+    }
+
+    impl From<Rems> for Length {
+        fn from(value: Rems) -> Self {
+            Self::Definite(value.into())
+        }
+    }
+
+    impl From<DefiniteLength> for Length {
+        fn from(value: DefiniteLength) -> Self {
+            Self::Definite(value)
+        }
+    }
+
+    impl From<AbsoluteLength> for Length {
+        fn from(value: AbsoluteLength) -> Self {
+            Self::Definite(value.into())
+        }
+    }
+
+    impl From<()> for Length {
+        fn from(_: ()) -> Self {
+            Self::default()
+        }
+    }
+
+    /// Constructs a relative parent-size fraction.
+    pub const fn relative(fraction: f32) -> DefiniteLength {
+        DefiniteLength::Fraction(fraction)
+    }
+
+    /// Returns the golden ratio as a relative length.
+    pub const fn phi() -> DefiniteLength {
+        relative(1.618_034)
+    }
+
+    /// Constructs an automatic length.
+    pub const fn auto() -> Length {
+        Length::Auto
     }
 }
 
