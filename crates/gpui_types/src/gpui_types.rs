@@ -411,6 +411,7 @@ pub mod input {
 }
 
 pub mod platform {
+    pub use crate::application::{AppLifecyclePhase, PlatformApplicationSpi};
     pub use crate::clipboard::{
         ClipboardEntry, ClipboardImage, ClipboardItem, ClipboardReadError, ClipboardString,
         ExternalPaths, ImageFormat, PlatformClipboardSpi,
@@ -545,6 +546,7 @@ pub mod platform {
     }
 }
 
+pub mod application;
 pub mod clipboard;
 pub mod context;
 pub mod credentials;
@@ -553,6 +555,7 @@ pub mod notifications;
 pub mod paths;
 pub mod urls;
 
+pub use application::*;
 pub use clipboard::*;
 pub use color::*;
 pub use context::*;

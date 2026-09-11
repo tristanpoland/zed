@@ -258,10 +258,13 @@ impl Application {
     {
         let this = self.0.clone();
         let platform = self.0.borrow().platform.clone();
-        platform.run(Box::new(move || {
-            let cx = &mut *this.borrow_mut();
-            on_finish_launching(cx);
-        }));
+        crate::PlatformApplicationSpi::run(
+            platform.as_ref(),
+            Box::new(move || {
+                let cx = &mut *this.borrow_mut();
+                on_finish_launching(cx);
+            }),
+        );
     }
 
     /// Start the application for an embedder that drives the run loop itself.
@@ -279,10 +282,13 @@ impl Application {
     {
         let this = self.0.clone();
         let platform = self.0.borrow().platform.clone();
-        platform.run(Box::new(move || {
-            let cx = &mut *this.borrow_mut();
-            on_finish_launching(cx);
-        }));
+        crate::PlatformApplicationSpi::run(
+            platform.as_ref(),
+            Box::new(move || {
+                let cx = &mut *this.borrow_mut();
+                on_finish_launching(cx);
+            }),
+        );
         ApplicationHandle { app: self.0 }
     }
 
@@ -303,11 +309,14 @@ impl Application {
         F: 'static + FnMut(&mut App),
     {
         let this = Rc::downgrade(&self.0);
-        self.0.borrow_mut().platform.on_reopen(Box::new(move || {
-            if let Some(app) = this.upgrade() {
-                callback(&mut app.borrow_mut());
-            }
-        }));
+        crate::PlatformApplicationSpi::on_reopen(
+            self.0.borrow_mut().platform.as_ref(),
+            Box::new(move || {
+                if let Some(app) = this.upgrade() {
+                    callback(&mut app.borrow_mut());
+                }
+            }),
+        );
         self
     }
 
@@ -925,37 +934,43 @@ impl App {
             }
         }));
 
-        platform.on_system_wake(Box::new({
-            let app = Rc::downgrade(&app);
-            move || {
-                if let Some(app) = app.upgrade() {
-                    let cx = &mut app.borrow_mut();
-                    cx.system_wake_observers
-                        .clone()
-                        .retain(&(), move |callback| (callback)(cx));
+        crate::PlatformApplicationSpi::on_system_wake(
+            platform.as_ref(),
+            Box::new({
+                let app = Rc::downgrade(&app);
+                move || {
+                    if let Some(app) = app.upgrade() {
+                        let cx = &mut app.borrow_mut();
+                        cx.system_wake_observers
+                            .clone()
+                            .retain(&(), move |callback| (callback)(cx));
+                    }
                 }
-            }
-        }));
+            }),
+        );
 
-        platform.on_quit(Box::new({
-            let cx = Rc::downgrade(&app);
-            move || {
-                let Some(cx) = cx.upgrade() else {
-                    return true;
-                };
-                match cx.try_borrow_mut() {
-                    Ok(mut cx) => {
-                        cx.shutdown();
-                        true
-                    }
-                    Err(_) => {
-                        // Quit was requested while the AppCell was borrowed, so we can't shut down synchronously.
-                        // The platform decides how to proceed.
-                        false
+        crate::PlatformApplicationSpi::on_quit(
+            platform.as_ref(),
+            Box::new({
+                let cx = Rc::downgrade(&app);
+                move || {
+                    let Some(cx) = cx.upgrade() else {
+                        return true;
+                    };
+                    match cx.try_borrow_mut() {
+                        Ok(mut cx) => {
+                            cx.shutdown();
+                            true
+                        }
+                        Err(_) => {
+                            // Quit was requested while the AppCell was borrowed, so we can't shut down synchronously.
+                            // The platform decides how to proceed.
+                            false
+                        }
                     }
                 }
-            }
-        }));
+            }),
+        );
 
         app
     }
@@ -1051,7 +1066,7 @@ impl App {
 
     /// Gracefully quit the application via the platform's standard routine.
     pub fn quit(&self) {
-        self.platform.quit();
+        crate::PlatformApplicationSpi::quit(self.platform.as_ref());
     }
 
     /// Returns the current policy for hiding the cursor in response to
@@ -1321,22 +1336,22 @@ impl App {
 
     /// Instructs the platform to activate the application by bringing it to the foreground.
     pub fn activate(&self, ignoring_other_apps: bool) {
-        self.platform.activate(ignoring_other_apps);
+        crate::PlatformApplicationSpi::activate(self.platform.as_ref(), ignoring_other_apps);
     }
 
     /// Hide the application at the platform level.
     pub fn hide(&self) {
-        self.platform.hide();
+        crate::PlatformApplicationSpi::hide(self.platform.as_ref());
     }
 
     /// Hide other applications at the platform level.
     pub fn hide_other_apps(&self) {
-        self.platform.hide_other_apps();
+        crate::PlatformApplicationSpi::hide_other_apps(self.platform.as_ref());
     }
 
     /// Unhide other applications at the platform level.
     pub fn unhide_other_apps(&self) {
-        self.platform.unhide_other_apps();
+        crate::PlatformApplicationSpi::unhide_other_apps(self.platform.as_ref());
     }
 
     /// Returns the list of currently active displays.
@@ -1554,7 +1569,7 @@ impl App {
     /// presents the application to the user. Call this once, early in startup,
     /// before opening windows or posting notifications.
     pub fn set_app_identity(&self, identifier: &str, name: &str) {
-        self.platform.set_app_identity(identifier, name);
+        crate::PlatformApplicationSpi::set_app_identity(self.platform.as_ref(), identifier, name);
     }
 
     /// Posts a notification to the operating system's notification center.
@@ -1668,7 +1683,8 @@ impl App {
         self.restart_observers
             .clone()
             .retain(&(), |observer| observer(self));
-        self.platform.restart(
+        crate::PlatformApplicationSpi::restart(
+            self.platform.as_ref(),
             self.restart_path.take(),
             std::mem::take(&mut self.restart_arguments),
         )

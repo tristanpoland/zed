@@ -79,8 +79,9 @@ pub use gpui_types::clipboard::{
 };
 pub use gpui_types::paths::{PathPromptOptions, PlatformPathSpi};
 pub use gpui_types::platform::{
-    CursorStyle, PlatformCredentialsSpi, PlatformCursorSpi, PlatformSystemNotificationSpi,
-    SystemNotification, SystemNotificationAction, SystemNotificationResponse,
+    AppLifecyclePhase, CursorStyle, PlatformApplicationSpi, PlatformCredentialsSpi,
+    PlatformCursorSpi, PlatformSystemNotificationSpi, SystemNotification, SystemNotificationAction,
+    SystemNotificationResponse,
 };
 pub use gpui_types::urls::PlatformUrlSpi;
 /// A clipboard entry using GPUI's runtime image type.
@@ -511,6 +512,60 @@ impl PlatformPathSpi for dyn Platform {
     }
 }
 
+impl PlatformApplicationSpi for dyn Platform {
+    fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>) {
+        Platform::run(self, on_finish_launching);
+    }
+
+    fn quit(&self) {
+        Platform::quit(self);
+    }
+
+    fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<OsString>) {
+        Platform::restart(self, binary_path, arguments);
+    }
+
+    fn activate(&self, ignoring_other_apps: bool) {
+        Platform::activate(self, ignoring_other_apps);
+    }
+
+    fn hide(&self) {
+        Platform::hide(self);
+    }
+
+    fn hide_other_apps(&self) {
+        Platform::hide_other_apps(self);
+    }
+
+    fn unhide_other_apps(&self) {
+        Platform::unhide_other_apps(self);
+    }
+
+    fn on_quit(&self, callback: Box<dyn FnMut() -> bool>) {
+        Platform::on_quit(self, callback);
+    }
+
+    fn on_reopen(&self, callback: Box<dyn FnMut()>) {
+        Platform::on_reopen(self, callback);
+    }
+
+    fn on_system_wake(&self, callback: Box<dyn FnMut()>) {
+        Platform::on_system_wake(self, callback);
+    }
+
+    fn on_app_lifecycle(&self, callback: Box<dyn FnMut(AppLifecyclePhase)>) {
+        Platform::on_app_lifecycle(self, callback);
+    }
+
+    fn on_memory_warning(&self, callback: Box<dyn FnMut()>) {
+        Platform::on_memory_warning(self, callback);
+    }
+
+    fn set_app_identity(&self, identifier: &str, name: &str) {
+        Platform::set_app_identity(self, identifier, name);
+    }
+}
+
 /// A handle to a platform's display, e.g. a monitor or laptop screen.
 pub trait PlatformDisplay: Debug {
     /// Get the ID for this display
@@ -875,31 +930,6 @@ pub struct RequestFrameOptions {
     pub require_presentation: bool,
     /// Force refresh of all rendering states when true.
     pub force_render: bool,
-}
-
-/// The application's lifecycle phase, as owned and reported by a mobile OS.
-///
-/// `Inactive` means visible but not receiving input (a system dialog on
-/// top), while `Background` means not visible at all, with process death
-/// possible at any time thereafter.
-///
-/// | Phase        | iOS                          | Android      |
-/// |--------------|------------------------------|--------------|
-/// | `Active`     | `didBecomeActive`            | `onResume`   |
-/// | `Inactive`   | `willResignActive`           | `onPause`    |
-/// | `Background` | `didEnterBackground`         | `onStop`     |
-/// | `Foreground` | `willEnterForeground`        | `onStart`    |
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum AppLifecyclePhase {
-    /// Foreground and receiving input.
-    Active,
-    /// Foreground (visible) but not receiving input.
-    Inactive,
-    /// Not visible. The GPU surface may be destroyed while backgrounded and
-    /// the process may be killed without further notice.
-    Background,
-    /// Becoming visible again, before input is restored.
-    Foreground,
 }
 
 /// Regions of a window that are obscured or reserved by the system.
