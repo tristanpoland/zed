@@ -77,6 +77,7 @@ use gpui_types::clipboard::{
 pub use gpui_types::clipboard::{
     ClipboardReadError, ClipboardString, ImageFormat, PlatformClipboardSpi,
 };
+pub use gpui_types::paths::{PathPromptOptions, PlatformPathSpi};
 pub use gpui_types::platform::{
     CursorStyle, PlatformCredentialsSpi, PlatformCursorSpi, PlatformSystemNotificationSpi,
     SystemNotification, SystemNotificationAction, SystemNotificationResponse,
@@ -475,6 +476,38 @@ impl PlatformUrlSpi for dyn Platform {
 
     fn register_url_scheme(&self, url: &str) -> Self::Task<Result<(), Self::Error>> {
         Platform::register_url_scheme(self, url)
+    }
+}
+
+impl PlatformPathSpi for dyn Platform {
+    type Task<T> = oneshot::Receiver<T>;
+    type Error = anyhow::Error;
+
+    fn prompt_for_paths(
+        &self,
+        options: PathPromptOptions,
+    ) -> Self::Task<Result<Option<Vec<PathBuf>>, Self::Error>> {
+        Platform::prompt_for_paths(self, options)
+    }
+
+    fn prompt_for_new_path(
+        &self,
+        directory: &Path,
+        suggested_name: Option<&str>,
+    ) -> Self::Task<Result<Option<PathBuf>, Self::Error>> {
+        Platform::prompt_for_new_path(self, directory, suggested_name)
+    }
+
+    fn can_select_mixed_files_and_dirs(&self) -> bool {
+        Platform::can_select_mixed_files_and_dirs(self)
+    }
+
+    fn reveal_path(&self, path: &Path) {
+        Platform::reveal_path(self, path);
+    }
+
+    fn open_with_system(&self, path: &Path) {
+        Platform::open_with_system(self, path);
     }
 }
 
@@ -2355,19 +2388,6 @@ pub enum TextRenderingMode {
     Subpixel,
     /// Use grayscale text rendering.
     Grayscale,
-}
-
-/// The options that can be configured for a file dialog prompt
-#[derive(Clone, Debug)]
-pub struct PathPromptOptions {
-    /// Should the prompt allow files to be selected?
-    pub files: bool,
-    /// Should the prompt allow directories to be selected?
-    pub directories: bool,
-    /// Should the prompt allow multiple files to be selected?
-    pub multiple: bool,
-    /// The prompt to show to a user when selecting a path
-    pub prompt: Option<SharedString>,
 }
 
 /// What kind of prompt styling to show

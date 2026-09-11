@@ -1627,7 +1627,7 @@ impl App {
         &self,
         options: PathPromptOptions,
     ) -> oneshot::Receiver<Result<Option<Vec<PathBuf>>>> {
-        self.platform.prompt_for_paths(options)
+        crate::PlatformPathSpi::prompt_for_paths(self.platform.as_ref(), options)
     }
 
     /// Displays a platform modal for selecting a new path where a file can be saved.
@@ -1641,17 +1641,21 @@ impl App {
         directory: &Path,
         suggested_name: Option<&str>,
     ) -> oneshot::Receiver<Result<Option<PathBuf>>> {
-        self.platform.prompt_for_new_path(directory, suggested_name)
+        crate::PlatformPathSpi::prompt_for_new_path(
+            self.platform.as_ref(),
+            directory,
+            suggested_name,
+        )
     }
 
     /// Reveals the specified path at the platform level, such as in Finder on macOS.
     pub fn reveal_path(&self, path: &Path) {
-        self.platform.reveal_path(path)
+        crate::PlatformPathSpi::reveal_path(self.platform.as_ref(), path)
     }
 
     /// Opens the specified path with the system's default application.
     pub fn open_with_system(&self, path: &Path) {
-        self.platform.open_with_system(path)
+        crate::PlatformPathSpi::open_with_system(self.platform.as_ref(), path)
     }
 
     /// Returns whether the user has configured scrollbars to auto-hide at the platform level.
@@ -2773,7 +2777,7 @@ impl App {
 
     /// Returns `true` if the platform file picker supports selecting a mix of files and directories.
     pub fn can_select_mixed_files_and_dirs(&self) -> bool {
-        self.platform.can_select_mixed_files_and_dirs()
+        crate::PlatformPathSpi::can_select_mixed_files_and_dirs(self.platform.as_ref())
     }
 
     /// Removes an image from the sprite atlas on all windows.

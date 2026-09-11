@@ -86,8 +86,9 @@ pub mod types {
         AnyEntity, AnyWeakEntity, App, AppContextObserve, AppContextRead, AppContextRuntime,
         AppContextSpawn, AppContextSpi, AppContextUpdate, AppContextWindow, Context,
         ContextListener, ContextObserve, ContextSpawn, ContextSpi, Entity, EntityHandle,
-        EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi, StrongEntityHandle,
-        SubscriptionHandle, TaskHandle, VisualContextSpi, WeakEntity, WeakEntityHandle, clipboard,
+        EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi, PathPromptOptions,
+        PlatformPathSpi, StrongEntityHandle, SubscriptionHandle, TaskHandle, VisualContextSpi,
+        WeakEntity, WeakEntityHandle, clipboard,
         platform::{
             CursorStyle, PlatformCredentialsSpi, PlatformCursorSpi, PlatformSystemNotificationSpi,
             PlatformUrlSpi, SystemNotification, SystemNotificationAction,

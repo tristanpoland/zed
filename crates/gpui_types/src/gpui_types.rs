@@ -550,6 +550,7 @@ pub mod context;
 pub mod credentials;
 pub mod entity;
 pub mod notifications;
+pub mod paths;
 pub mod urls;
 
 pub use clipboard::*;
@@ -560,5 +561,6 @@ pub use entity::*;
 pub use geometry::*;
 pub use input::*;
 pub use notifications::*;
+pub use paths::*;
 pub use platform::*;
 pub use urls::PlatformUrlSpi;
