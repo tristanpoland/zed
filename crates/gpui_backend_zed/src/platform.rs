@@ -91,6 +91,7 @@ pub use gpui_types::platform::{
     PlatformCursorSpi, PlatformServicesSpi, PlatformSystemNotificationSpi, SystemNotification,
     SystemNotificationAction, SystemNotificationResponse,
 };
+pub use gpui_types::ActivityGuard;
 pub use gpui_types::urls::PlatformUrlSpi;
 pub use gpui_types::window::{
     MAX_BUTTONS_PER_SIDE, PlatformDisplaySpi, PlatformWindowSpi, PlatformWindowingSpi,
@@ -132,25 +133,6 @@ pub use threaded_dispatcher::ThreadedDispatcher;
 
 #[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
 pub use visual_test::VisualTestPlatform;
-
-/// Keeps an operating system activity, such as an idle sleep inhibitor, alive until dropped.
-pub struct ActivityGuard {
-    _release: gpui_util::Deferred<Box<dyn FnOnce() + Send>>,
-}
-
-impl ActivityGuard {
-    /// Runs `release` when the guard is dropped.
-    pub fn new(release: impl FnOnce() + Send + 'static) -> Self {
-        Self {
-            _release: gpui_util::defer(Box::new(release)),
-        }
-    }
-
-    /// A guard for platforms without a corresponding activity.
-    pub fn noop() -> Self {
-        Self::new(|| {})
-    }
-}
 
 // TODO(jk): return an enum instead of a string
 /// Return which compositor we're guessing we'll use.

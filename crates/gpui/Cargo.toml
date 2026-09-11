@@ -20,6 +20,7 @@ workspace = true
 default = ["font-kit", "wayland", "x11", "windows-manifest"]
 font-kit = []
 test-support = [
+    "gpui_types/test-support",
     "leak-detection",
     "collections/test-support",
     "http_client/test-support",

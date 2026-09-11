@@ -1,54 +1,298 @@
-use crate::{ActivityGuard, App, PlatformDispatcher, PlatformScheduler};
-#[cfg(not(target_family = "wasm"))]
-use futures::channel::mpsc;
+use crate::{App, PlatformDispatcher, PlatformScheduler};
 use futures::prelude::*;
-use gpui_types::{BackgroundExecutorSpi, ForegroundExecutorSpi};
+use gpui_types::{ActivityGuard, BackgroundExecutorBackend, ForegroundExecutorBackend};
 use gpui_util::{TryFutureExt, TryFutureExtBacktrace};
-use scheduler::Instant;
-use scheduler::Scheduler;
-#[cfg(not(target_family = "wasm"))]
-use std::mem;
-use std::{
-    future::Future,
-    marker::PhantomData,
-    pin::Pin,
-    rc::Rc,
-    sync::Arc,
-    time::Duration,
-};
+#[cfg(any(test, feature = "test-support"))]
+use scheduler::Yield;
+use scheduler::{Instant, Scheduler};
+use std::{future::Future, sync::Arc, time::Duration};
 
-pub use scheduler::{
-    DedicatedExecutor, FallibleTask, LocalExecutor as SchedulerLocalExecutor, Priority,
-};
-pub use gpui_types::Task;
-
-/// A pointer to the executor that is currently running,
-/// for spawning background tasks.
+#[doc(hidden)]
 #[derive(Clone)]
-pub struct BackgroundExecutor {
+pub struct BackgroundExecutorBackendImpl {
     inner: scheduler::BackgroundExecutor,
     dispatcher: Arc<dyn PlatformDispatcher>,
 }
 
-/// A pointer to the executor that is currently running,
-/// for spawning tasks on the main thread.
+impl BackgroundExecutorBackend for BackgroundExecutorBackendImpl {
+    type Dispatcher = dyn PlatformDispatcher;
+
+    fn new(dispatcher: Arc<Self::Dispatcher>) -> Self {
+        #[cfg(any(test, feature = "test-support"))]
+        let scheduler: Arc<dyn Scheduler> = if let Some(test_dispatcher) = dispatcher.as_test() {
+            test_dispatcher.scheduler().clone()
+        } else {
+            Arc::new(PlatformScheduler::new(dispatcher.clone()))
+        };
+
+        #[cfg(not(any(test, feature = "test-support")))]
+        let scheduler: Arc<dyn Scheduler> = Arc::new(PlatformScheduler::new(dispatcher.clone()));
+
+        Self {
+            inner: scheduler::BackgroundExecutor::new(scheduler),
+            dispatcher,
+        }
+    }
+
+    fn scheduler_executor(&self) -> scheduler::BackgroundExecutor {
+        self.inner.clone()
+    }
+
+    fn prevent_app_nap(&self, reason: &str) -> ActivityGuard {
+        self.dispatcher.prevent_app_nap(reason)
+    }
+
+    fn spawn_dedicated<F, Fut>(&self, f: F) -> Task<Fut::Output>
+    where
+        F: FnOnce(scheduler::LocalExecutor) -> Fut + Send + 'static,
+        Fut: Future + 'static,
+        Fut::Output: Send + Sync + 'static,
+    {
+        self.inner.spawn_dedicated(f).into()
+    }
+
+    fn spawn<R>(&self, future: impl Future<Output = R> + Send + 'static) -> Task<R>
+    where
+        R: Send + 'static,
+    {
+        self.inner.spawn(future).into()
+    }
+
+    fn spawn_with_priority<R>(
+        &self,
+        priority: scheduler::Priority,
+        future: impl Future<Output = R> + Send + 'static,
+    ) -> Task<R>
+    where
+        R: Send + 'static,
+    {
+        if priority == scheduler::Priority::RealtimeAudio {
+            self.inner.spawn_realtime(future).into()
+        } else {
+            self.inner.spawn_with_priority(priority, future).into()
+        }
+    }
+
+    fn timer(&self, duration: Duration) -> Task<()> {
+        if duration.is_zero() {
+            Task::ready(())
+        } else {
+            self.inner
+                .spawn(self.inner.scheduler().timer(duration))
+                .into()
+        }
+    }
+
+    fn now(&self) -> Instant {
+        self.inner.scheduler().clock().now()
+    }
+
+    fn is_main_thread(&self) -> bool {
+        self.dispatcher.is_main_thread()
+    }
+
+    fn num_cpus(&self) -> usize {
+        #[cfg(any(test, feature = "test-support"))]
+        if let Some(test) = self.dispatcher.as_test() {
+            return test.num_cpus_override().unwrap_or(4);
+        }
+        num_cpus::get()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    type RandomDelay = Yield;
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn simulate_random_delay(&self) -> Self::RandomDelay {
+        self.dispatcher.as_test().unwrap().simulate_random_delay()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn advance_clock(&self, duration: Duration) {
+        self.dispatcher.as_test().unwrap().advance_clock(duration)
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn tick(&self) -> bool {
+        self.dispatcher.as_test().unwrap().scheduler().tick()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn run_until_parked(&self) {
+        self.dispatcher.as_test().unwrap().scheduler().run()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn allow_parking(&self) {
+        self.dispatcher
+            .as_test()
+            .unwrap()
+            .scheduler()
+            .allow_parking();
+        if std::env::var("GPUI_RUN_UNTIL_PARKED_LOG").ok().as_deref() == Some("1") {
+            log::warn!("[gpui::executor] allow_parking: enabled");
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn set_block_on_ticks(&self, range: std::ops::RangeInclusive<usize>) {
+        self.dispatcher
+            .as_test()
+            .unwrap()
+            .scheduler()
+            .set_timeout_ticks(range);
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn forbid_parking(&self) {
+        self.dispatcher
+            .as_test()
+            .unwrap()
+            .scheduler()
+            .forbid_parking()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn rng(&self) -> scheduler::SharedRng {
+        self.dispatcher.as_test().unwrap().scheduler().rng()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn set_num_cpus(&self, count: usize) {
+        self.dispatcher
+            .as_test()
+            .expect("set_num_cpus can only be called on a test executor")
+            .set_num_cpus(count);
+    }
+}
+
+#[doc(hidden)]
 #[derive(Clone)]
-pub struct ForegroundExecutor {
+pub struct ForegroundExecutorBackendImpl {
     inner: scheduler::LocalExecutor,
     dispatcher: Arc<dyn PlatformDispatcher>,
     #[cfg(feature = "profiler")]
     foreground_runnables: Option<crate::profiler::journal::ForegroundRunnableCounter>,
-    not_send: PhantomData<Rc<()>>,
 }
 
+impl ForegroundExecutorBackend for ForegroundExecutorBackendImpl {
+    type Dispatcher = dyn PlatformDispatcher;
+
+    fn new(dispatcher: Arc<Self::Dispatcher>) -> Self {
+        #[cfg(any(test, feature = "test-support"))]
+        let (scheduler, session_id): (Arc<dyn Scheduler>, _) =
+            if let Some(test_dispatcher) = dispatcher.as_test() {
+                (
+                    test_dispatcher.scheduler().clone(),
+                    test_dispatcher.session_id(),
+                )
+            } else {
+                let platform_scheduler = Arc::new(PlatformScheduler::new(dispatcher.clone()));
+                return Self {
+                    inner: platform_scheduler.foreground_executor(),
+                    dispatcher,
+                    #[cfg(feature = "profiler")]
+                    foreground_runnables: Some(platform_scheduler.foreground_runnable_counter()),
+                };
+            };
+
+        #[cfg(not(any(test, feature = "test-support")))]
+        let platform_scheduler = Arc::new(PlatformScheduler::new(dispatcher.clone()));
+        #[cfg(not(any(test, feature = "test-support")))]
+        let inner = platform_scheduler.foreground_executor();
+        #[cfg(all(not(any(test, feature = "test-support")), feature = "profiler"))]
+        let foreground_runnables = Some(platform_scheduler.foreground_runnable_counter());
+
+        #[cfg(any(test, feature = "test-support"))]
+        let inner = {
+            let scheduler_for_dispatch = Arc::downgrade(&scheduler);
+            scheduler::LocalExecutor::new(session_id, scheduler, move |runnable| {
+                if let Some(scheduler) = scheduler_for_dispatch.upgrade() {
+                    scheduler.schedule_local(session_id, runnable);
+                }
+            })
+        };
+
+        #[cfg(all(any(test, feature = "test-support"), feature = "profiler"))]
+        let foreground_runnables = None;
+
+        Self {
+            inner,
+            dispatcher,
+            #[cfg(feature = "profiler")]
+            foreground_runnables,
+        }
+    }
+
+    fn scheduler_executor(&self) -> scheduler::LocalExecutor {
+        self.inner.clone()
+    }
+
+    fn spawn<R>(&self, future: impl Future<Output = R> + 'static) -> Task<R>
+    where
+        R: 'static,
+    {
+        self.inner.spawn(future.boxed_local()).into()
+    }
+
+    fn spawn_with_priority<R>(
+        &self,
+        _priority: scheduler::Priority,
+        future: impl Future<Output = R> + 'static,
+    ) -> Task<R>
+    where
+        R: 'static,
+    {
+        self.inner.spawn(future).into()
+    }
+
+    fn spawn_when_idle<R>(
+        &self,
+        timeout: Option<Duration>,
+        future: impl Future<Output = R> + 'static,
+    ) -> Task<R>
+    where
+        R: 'static,
+    {
+        let dispatcher = self.dispatcher.clone();
+        #[cfg(feature = "profiler")]
+        let foreground_runnables = self.foreground_runnables.clone();
+        self.inner
+            .spawn_with_dispatch(future.boxed_local(), move |runnable| {
+                #[cfg(feature = "profiler")]
+                if let Some(foreground_runnables) = &foreground_runnables {
+                    foreground_runnables.queued();
+                }
+                gpui_types::DispatcherSpi::dispatch_on_main_thread_when_idle(
+                    dispatcher.as_ref(),
+                    runnable,
+                    scheduler::Priority::Low,
+                    timeout,
+                );
+            })
+            .into()
+    }
+
+    fn idle_time_remaining(&self) -> Option<Duration> {
+        self.dispatcher.idle_time_remaining()
+    }
+}
+
+/// The shared background executor identity backed by GPUI's platform scheduler.
+pub type BackgroundExecutor = gpui_types::BackgroundExecutor<BackgroundExecutorBackendImpl>;
+/// The shared foreground executor identity backed by GPUI's platform scheduler.
+pub type ForegroundExecutor = gpui_types::ForegroundExecutor<ForegroundExecutorBackendImpl>;
+#[cfg(not(target_family = "wasm"))]
+/// A group of background tasks joined by the shared executor identity.
+pub type Scope<'a> = gpui_types::Scope<'a, BackgroundExecutorBackendImpl>;
+
+pub use gpui_types::{DedicatedExecutor, FallibleTask, Priority, SchedulerLocalExecutor};
+
 /// Extension trait for `Task<Result<T, E>>` that adds `detach_and_log_err` with an `&App` context.
-///
-/// This trait is automatically implemented for all `Task<Result<T, E>>` types.
 pub trait TaskExt<T, E> {
     /// Run the task to completion in the background and log any errors that occur.
     fn detach_and_log_err(self, cx: &App);
-    /// Like [`Self::detach_and_log_err`], but uses `{:?}` formatting on failure so `anyhow::Error`
-    /// values emit their full backtrace. Prefer `detach_and_log_err` unless a backtrace is wanted.
+    /// Like [`Self::detach_and_log_err`], but uses `{:?}` formatting on failure.
     fn detach_and_log_err_with_backtrace(self, cx: &App);
 }
 
@@ -74,580 +318,26 @@ where
     }
 }
 
-impl BackgroundExecutor {
-    /// Creates a new BackgroundExecutor from the given PlatformDispatcher.
-    pub fn new(dispatcher: Arc<dyn PlatformDispatcher>) -> Self {
-        #[cfg(any(test, feature = "test-support"))]
-        let scheduler: Arc<dyn Scheduler> = if let Some(test_dispatcher) = dispatcher.as_test() {
-            test_dispatcher.scheduler().clone()
-        } else {
-            Arc::new(PlatformScheduler::new(dispatcher.clone()))
-        };
-
-        #[cfg(not(any(test, feature = "test-support")))]
-        let scheduler: Arc<dyn Scheduler> = Arc::new(PlatformScheduler::new(dispatcher.clone()));
-
-        Self {
-            inner: scheduler::BackgroundExecutor::new(scheduler),
-            dispatcher,
-        }
-    }
-
-    /// Returns the underlying scheduler::BackgroundExecutor.
-    ///
-    /// This is used by Ex to pass the executor to thread/worktree code.
-    pub fn scheduler_executor(&self) -> scheduler::BackgroundExecutor {
-        self.inner.clone()
-    }
-
-    /// Prevents App Nap-style throttling while the returned guard is held.
-    ///
-    /// This does not prevent the system from entering idle sleep.
-    pub fn prevent_app_nap(&self, reason: &str) -> ActivityGuard {
-        self.dispatcher.prevent_app_nap(reason)
-    }
-
-    /// Spawn a closure on a fresh session pinned to its own [`SchedulerLocalExecutor`].
-    /// The closure runs on a new OS thread under the platform scheduler, or on
-    /// the test scheduler's loop in tests.
-    ///
-    /// Prefer this over [`Self::spawn`] for futures whose polls need more stack
-    /// than shared background threads guarantee. Dedicated threads get the
-    /// standard library's default 2 MiB, while `spawn` polls futures on
-    /// whatever threads the platform dispatcher provides — on macOS those are
-    /// GCD workers whose stacks are fixed at 512 KiB by the kernel (see `PTH_DEFAULT_STACKSIZE` in
-    /// <https://github.com/apple-oss-distributions/libpthread/blob/42d026df5b07825070f60134b980a1ec2552dfee/kern/kern_internal.h#L154>),
-    /// the tightest background-stack budget of any platform.
-    #[track_caller]
-    pub fn spawn_dedicated<F, Fut>(&self, f: F) -> Task<Fut::Output>
-    where
-        F: FnOnce(SchedulerLocalExecutor) -> Fut + Send + 'static,
-        Fut: Future + 'static,
-        Fut::Output: Send + Sync + 'static,
-    {
-        self.inner.spawn_dedicated(f).into()
-    }
-
-    /// Enqueues the given future to be run to completion on a background thread.
-    #[track_caller]
-    pub fn spawn<R>(&self, future: impl Future<Output = R> + Send + 'static) -> Task<R>
-    where
-        R: Send + 'static,
-    {
-        self.spawn_with_priority(Priority::default(), future.boxed())
-    }
-
-    /// Enqueues the given future to be run to completion on a background thread with the given priority.
-    ///
-    /// When `Priority::RealtimeAudio` is used, the task runs on a dedicated thread with
-    /// realtime scheduling priority, suitable for audio processing.
-    #[track_caller]
-    pub fn spawn_with_priority<R>(
-        &self,
-        priority: Priority,
-        future: impl Future<Output = R> + Send + 'static,
-    ) -> Task<R>
-    where
-        R: Send + 'static,
-    {
-        if priority == Priority::RealtimeAudio {
-            self.inner.spawn_realtime(future).into()
-        } else {
-            self.inner.spawn_with_priority(priority, future).into()
-        }
-    }
-
-    /// Runs background tasks that may borrow from their environment and waits for all of them to complete.
-    ///
-    /// Dropping the returned future cancels its tasks and synchronously waits for their futures to
-    /// be destroyed before returning.
-    #[cfg(not(target_family = "wasm"))]
-    pub async fn scoped<'scope, F>(&self, scheduler: F)
-    where
-        F: FnOnce(&mut Scope<'scope>),
-    {
-        let mut scope = Scope::new(self.clone(), Priority::default());
-        (scheduler)(&mut scope);
-        let spawned = mem::take(&mut scope.futures)
-            .into_iter()
-            .map(|f| self.spawn_with_priority(scope.priority, f))
-            .collect::<Vec<_>>();
-        for task in spawned {
-            task.await;
-        }
-    }
-
-    /// Runs prioritized background tasks that may borrow from their environment and waits for all
-    /// of them to complete.
-    ///
-    /// Dropping the returned future cancels its tasks and synchronously waits for their futures to
-    /// be destroyed before returning.
-    #[cfg(not(target_family = "wasm"))]
-    pub async fn scoped_priority<'scope, F>(&self, priority: Priority, scheduler: F)
-    where
-        F: FnOnce(&mut Scope<'scope>),
-    {
-        let mut scope = Scope::new(self.clone(), priority);
-        (scheduler)(&mut scope);
-        let spawned = mem::take(&mut scope.futures)
-            .into_iter()
-            .map(|f| self.spawn_with_priority(scope.priority, f))
-            .collect::<Vec<_>>();
-        for task in spawned {
-            task.await;
-        }
-    }
-
-    /// Get the current time.
-    ///
-    /// Calling this instead of `std::time::Instant::now` allows the use
-    /// of fake timers in tests.
-    pub fn now(&self) -> Instant {
-        self.inner.scheduler().clock().now()
-    }
-
-    /// Returns a task that will complete after the given duration.
-    /// Depending on other concurrent tasks the elapsed duration may be longer
-    /// than requested.
-    #[track_caller]
-    pub fn timer(&self, duration: Duration) -> Task<()> {
-        if duration.is_zero() {
-            return Task::ready(());
-        }
-        self.spawn(self.inner.scheduler().timer(duration))
-    }
-
-    /// In tests, run an arbitrary number of tasks (determined by the SEED environment variable)
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_random_delay(&self) -> impl Future<Output = ()> + use<> {
-        self.dispatcher.as_test().unwrap().simulate_random_delay()
-    }
-
-    /// In tests, move time forward. This does not run any tasks, but does make `timer`s ready.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn advance_clock(&self, duration: Duration) {
-        self.dispatcher.as_test().unwrap().advance_clock(duration)
-    }
-
-    /// In tests, run one task.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn tick(&self) -> bool {
-        self.dispatcher.as_test().unwrap().scheduler().tick()
-    }
-
-    /// In tests, run tasks until the scheduler would park.
-    ///
-    /// Under the scheduler-backed test dispatcher, `tick()` will not advance the clock, so a pending
-    /// timer can keep `has_pending_tasks()` true even after all currently-runnable tasks have been
-    /// drained. To preserve the historical semantics that tests relied on (drain all work that can
-    /// make progress), we advance the clock to the next timer when no runnable tasks remain.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn run_until_parked(&self) {
-        let scheduler = self.dispatcher.as_test().unwrap().scheduler();
-        scheduler.run();
-    }
-
-    /// In tests, prevents `run_until_parked` from panicking if there are outstanding tasks.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn allow_parking(&self) {
-        self.dispatcher
-            .as_test()
-            .unwrap()
-            .scheduler()
-            .allow_parking();
-
-        if std::env::var("GPUI_RUN_UNTIL_PARKED_LOG").ok().as_deref() == Some("1") {
-            log::warn!("[gpui::executor] allow_parking: enabled");
-        }
-    }
-
-    /// Sets the range of ticks to run before timing out in block_on.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn set_block_on_ticks(&self, range: std::ops::RangeInclusive<usize>) {
-        self.dispatcher
-            .as_test()
-            .unwrap()
-            .scheduler()
-            .set_timeout_ticks(range);
-    }
-
-    /// Undoes the effect of [`Self::allow_parking`].
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn forbid_parking(&self) {
-        self.dispatcher
-            .as_test()
-            .unwrap()
-            .scheduler()
-            .forbid_parking();
-    }
-
-    /// In tests, returns the rng used by the dispatcher.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn rng(&self) -> scheduler::SharedRng {
-        self.dispatcher.as_test().unwrap().scheduler().rng()
-    }
-
-    /// How many CPUs are available to the dispatcher.
-    pub fn num_cpus(&self) -> usize {
-        #[cfg(any(test, feature = "test-support"))]
-        if let Some(test) = self.dispatcher.as_test() {
-            return test.num_cpus_override().unwrap_or(4);
-        }
-        num_cpus::get()
-    }
-
-    /// Override the number of CPUs reported by this executor in tests.
-    /// Panics if not called on a test executor.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn set_num_cpus(&self, count: usize) {
-        self.dispatcher
-            .as_test()
-            .expect("set_num_cpus can only be called on a test executor")
-            .set_num_cpus(count);
-    }
-
-    /// Whether we're on the main thread.
-    pub fn is_main_thread(&self) -> bool {
-        self.dispatcher.is_main_thread()
-    }
-
-    #[doc(hidden)]
-    pub fn dispatcher(&self) -> &Arc<dyn PlatformDispatcher> {
-        &self.dispatcher
-    }
-}
-
-impl ForegroundExecutor {
-    /// Creates a new ForegroundExecutor from the given PlatformDispatcher.
-    pub fn new(dispatcher: Arc<dyn PlatformDispatcher>) -> Self {
-        #[cfg(any(test, feature = "test-support"))]
-        let (scheduler, session_id): (Arc<dyn Scheduler>, _) =
-            if let Some(test_dispatcher) = dispatcher.as_test() {
-                (
-                    test_dispatcher.scheduler().clone(),
-                    test_dispatcher.session_id(),
-                )
-            } else {
-                let platform_scheduler = Arc::new(PlatformScheduler::new(dispatcher.clone()));
-                let inner = platform_scheduler.foreground_executor();
-                return Self {
-                    inner,
-                    dispatcher,
-                    #[cfg(feature = "profiler")]
-                    foreground_runnables: Some(platform_scheduler.foreground_runnable_counter()),
-                    not_send: PhantomData,
-                };
-            };
-
-        #[cfg(not(any(test, feature = "test-support")))]
-        let platform_scheduler = Arc::new(PlatformScheduler::new(dispatcher.clone()));
-        #[cfg(not(any(test, feature = "test-support")))]
-        let inner = platform_scheduler.foreground_executor();
-        #[cfg(all(not(any(test, feature = "test-support")), feature = "profiler"))]
-        let foreground_runnables = Some(platform_scheduler.foreground_runnable_counter());
-
-        #[cfg(any(test, feature = "test-support"))]
-        let inner = {
-            let scheduler_for_dispatch = Arc::downgrade(&scheduler);
-            scheduler::LocalExecutor::new(session_id, scheduler, move |runnable| {
-                if let Some(scheduler) = scheduler_for_dispatch.upgrade() {
-                    scheduler.schedule_local(session_id, runnable);
-                }
-            })
-        };
-
-        #[cfg(all(any(test, feature = "test-support"), feature = "profiler"))]
-        // The deterministic test scheduler does not invoke GPUI's task profiler
-        // hooks, so an increment here would have no matching decrement.
-        let foreground_runnables = None;
-
-        Self {
-            inner,
-            dispatcher,
-            #[cfg(feature = "profiler")]
-            foreground_runnables,
-            not_send: PhantomData,
-        }
-    }
-
-    /// Enqueues the given Task to run on the main thread.
-    #[track_caller]
-    pub fn spawn<R>(&self, future: impl Future<Output = R> + 'static) -> Task<R>
-    where
-        R: 'static,
-    {
-        self.inner.spawn(future.boxed_local()).into()
-    }
-
-    /// Enqueues the given Task to run on the main thread with the given priority.
-    #[track_caller]
-    pub fn spawn_with_priority<R>(
-        &self,
-        _priority: Priority,
-        future: impl Future<Output = R> + 'static,
-    ) -> Task<R>
-    where
-        R: 'static,
-    {
-        // Priority is ignored for foreground tasks - they run in order on the main thread
-        self.inner.spawn(future).into()
-    }
-
-    /// On platforms with dedicated support, enqueues the given future to run
-    /// on the main thread during platform idle time. Without a `timeout`,
-    /// polls may be deferred indefinitely while the platform stays busy;
-    /// with one, a poll still waiting after that long runs as ordinary main-thread work.
-    /// Each poll occupies part of one idle slice, so long synchronous stretches
-    /// should bound themselves against [`Self::idle_time_remaining`] and yield.
-    ///
-    /// On platforms without dedicated support, schedules the given future to run
-    /// with a low priority, ignoring `timeout`.
-    #[track_caller]
-    pub fn spawn_when_idle<R>(
-        &self,
-        timeout: Option<Duration>,
-        future: impl Future<Output = R> + 'static,
-    ) -> Task<R>
-    where
-        R: 'static,
-    {
-        let dispatcher = self.dispatcher.clone();
-        #[cfg(feature = "profiler")]
-        let foreground_runnables = self.foreground_runnables.clone();
-        self.inner
-            .spawn_with_dispatch(future.boxed_local(), move |runnable| {
-                #[cfg(feature = "profiler")]
-                if let Some(foreground_runnables) = &foreground_runnables {
-                    foreground_runnables.queued();
-                }
-                gpui_types::DispatcherSpi::dispatch_on_main_thread_when_idle(
-                    dispatcher.as_ref(),
-                    runnable,
-                    Priority::Low,
-                    timeout,
-                );
-            })
-            .into()
-    }
-
-    /// The time remaining in the current idle slice, when called from a task
-    /// spawned via [`Self::spawn_when_idle`] on a platform that meters idle
-    /// time. `None` when idle time is unmetered (or the caller is not inside
-    /// an idle slice); work that must bound itself should then fall back to a
-    /// budget of its own.
-    pub fn idle_time_remaining(&self) -> Option<Duration> {
-        self.dispatcher.idle_time_remaining()
-    }
-
-    /// Used by the test harness to run an async test in a synchronous fashion.
-    #[cfg(all(not(target_family = "wasm"), any(test, feature = "test-support")))]
-    #[track_caller]
-    pub fn block_test<R>(&self, future: impl Future<Output = R>) -> R {
-        use std::cell::Cell;
-
-        let scheduler = self.inner.scheduler();
-
-        let output = Cell::new(None);
-        let future = async {
-            output.set(Some(future.await));
-        };
-        let mut future = std::pin::pin!(future);
-
-        // In async GPUI tests, we must allow foreground tasks scheduled by the test itself
-        // (which are associated with the test session) to make progress while we block.
-        // Otherwise, awaiting futures that depend on same-session foreground work can deadlock.
-        scheduler.block(None, future.as_mut(), None);
-
-        output.take().expect("block_test future did not complete")
-    }
-
-    /// Block the current thread until the given future resolves.
-    /// Consider using `block_with_timeout` instead.
-    #[cfg(not(target_family = "wasm"))]
-    pub fn block_on<R>(&self, future: impl Future<Output = R>) -> R {
-        self.inner.block_on(future)
-    }
-
-    /// Block the current thread until the given future resolves or the timeout elapses.
-    #[cfg(not(target_family = "wasm"))]
-    pub fn block_with_timeout<R, Fut: Future<Output = R>>(
-        &self,
-        duration: Duration,
-        future: Fut,
-    ) -> Result<R, impl Future<Output = R> + use<R, Fut>> {
-        self.inner.block_with_timeout(duration, future)
-    }
-
-    #[doc(hidden)]
-    pub fn dispatcher(&self) -> &Arc<dyn PlatformDispatcher> {
-        &self.dispatcher
-    }
-
-    #[doc(hidden)]
-    pub fn scheduler_executor(&self) -> SchedulerLocalExecutor {
-        self.inner.clone()
-    }
-}
-
-impl BackgroundExecutorSpi for BackgroundExecutor {
-    type Task<T> = Task<T>;
-    type Priority = Priority;
-    type Instant = Instant;
-
-    fn spawn<R>(&self, future: impl Future<Output = R> + Send + 'static) -> Self::Task<R>
-    where
-        R: Send + 'static,
-    {
-        BackgroundExecutor::spawn(self, future)
-    }
-
-    fn spawn_with_priority<R>(
-        &self,
-        priority: Self::Priority,
-        future: impl Future<Output = R> + Send + 'static,
-    ) -> Self::Task<R>
-    where
-        R: Send + 'static,
-    {
-        BackgroundExecutor::spawn_with_priority(self, priority, future)
-    }
-
-    fn timer(&self, duration: Duration) -> Self::Task<()> {
-        BackgroundExecutor::timer(self, duration)
-    }
-
-    fn now(&self) -> Self::Instant {
-        BackgroundExecutor::now(self)
-    }
-}
-
-impl ForegroundExecutorSpi for ForegroundExecutor {
-    type Task<T> = Task<T>;
-    type Priority = Priority;
-
-    fn spawn<R>(&self, future: impl Future<Output = R> + 'static) -> Self::Task<R>
-    where
-        R: 'static,
-    {
-        ForegroundExecutor::spawn(self, future)
-    }
-
-    fn spawn_with_priority<R>(
-        &self,
-        priority: Self::Priority,
-        future: impl Future<Output = R> + 'static,
-    ) -> Self::Task<R>
-    where
-        R: 'static,
-    {
-        ForegroundExecutor::spawn_with_priority(self, priority, future)
-    }
-
-    fn spawn_when_idle<R>(
-        &self,
-        timeout: Option<Duration>,
-        future: impl Future<Output = R> + 'static,
-    ) -> Self::Task<R>
-    where
-        R: 'static,
-    {
-        ForegroundExecutor::spawn_when_idle(self, timeout, future)
-    }
-
-    fn idle_time_remaining(&self) -> Option<Duration> {
-        ForegroundExecutor::idle_time_remaining(self)
-    }
-}
-
-/// Scope manages a set of tasks that are enqueued and waited on together. See [`BackgroundExecutor::scoped`].
-#[cfg(not(target_family = "wasm"))]
-pub struct Scope<'a> {
-    executor: BackgroundExecutor,
-    priority: Priority,
-    futures: Vec<Pin<Box<dyn Future<Output = ()> + Send + 'static>>>,
-    tx: Option<mpsc::Sender<()>>,
-    rx: mpsc::Receiver<()>,
-    lifetime: PhantomData<&'a ()>,
-}
-
-#[cfg(not(target_family = "wasm"))]
-impl<'a> Scope<'a> {
-    fn new(executor: BackgroundExecutor, priority: Priority) -> Self {
-        let (tx, rx) = mpsc::channel(1);
-        Self {
-            executor,
-            priority,
-            tx: Some(tx),
-            rx,
-            futures: Default::default(),
-            lifetime: PhantomData,
-        }
-    }
-
-    /// How many CPUs are available to the dispatcher.
-    pub fn num_cpus(&self) -> usize {
-        self.executor.num_cpus()
-    }
-
-    /// Spawn a future into this scope.
-    #[track_caller]
-    pub fn spawn<F>(&mut self, f: F)
-    where
-        F: Future<Output = ()> + Send + 'a,
-    {
-        let tx = self.tx.clone().unwrap();
-
-        // SAFETY: The 'a lifetime is guaranteed to outlive any of these futures because
-        // dropping this `Scope` blocks until all of the futures have resolved.
-        let f = unsafe {
-            mem::transmute::<
-                Pin<Box<dyn Future<Output = ()> + Send + 'a>>,
-                Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
-            >(Box::pin(async move {
-                f.await;
-                drop(tx);
-            }))
-        };
-        self.futures.push(f);
-    }
-}
-
-#[cfg(not(target_family = "wasm"))]
-impl Drop for Scope<'_> {
-    fn drop(&mut self) {
-        self.tx.take().unwrap();
-
-        // Wait until the channel is closed, which means that all of the spawned
-        // futures have resolved.
-        let future = async {
-            self.rx.next().await;
-        };
-        let mut future = std::pin::pin!(future);
-        self.executor
-            .inner
-            .scheduler()
-            .block(None, future.as_mut(), None);
-    }
-}
+pub use gpui_types::Task;
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{App, TestDispatcher, TestPlatform};
-    use std::cell::RefCell;
+    use std::{cell::RefCell, rc::Rc};
 
-    /// Helper to create test infrastructure.
-    /// Returns (dispatcher, background_executor, app).
-    fn create_test_app() -> (TestDispatcher, BackgroundExecutor, Rc<crate::AppCell>) {
+    fn create_test_app() -> (
+        TestDispatcher,
+        BackgroundExecutor,
+        std::rc::Rc<crate::AppCell>,
+    ) {
         let dispatcher = TestDispatcher::new(0);
         let arc_dispatcher = Arc::new(dispatcher.clone());
         let background_executor = BackgroundExecutor::new(arc_dispatcher.clone());
         let foreground_executor = ForegroundExecutor::new(arc_dispatcher);
-
         let platform = TestPlatform::new(background_executor.clone(), foreground_executor);
         let asset_source = Arc::new(());
         let http_client = http_client::FakeHttpClient::with_404_response();
-
         let app = App::new_app(platform, asset_source, http_client);
         (dispatcher, background_executor, app)
     }
@@ -656,9 +346,7 @@ mod test {
     fn sanity_test_tasks_run() {
         let (dispatcher, _background_executor, app) = create_test_app();
         let foreground_executor = app.borrow().foreground_executor.clone();
-
         let task_ran = Rc::new(RefCell::new(false));
-
         foreground_executor
             .spawn({
                 let task_ran = Rc::clone(&task_ran);
@@ -667,11 +355,7 @@ mod test {
                 }
             })
             .detach();
-
-        // Run dispatcher while app is still alive
         dispatcher.run_until_parked();
-
-        // Task should have run
         assert!(
             *task_ran.borrow(),
             "Task should run normally when app is alive"

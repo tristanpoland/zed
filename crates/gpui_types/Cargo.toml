@@ -11,6 +11,9 @@ readme = "README.md"
 [lints]
 workspace = true
 
+[features]
+test-support = []
+
 [lib]
 path = "src/gpui_types.rs"
 
@@ -18,6 +21,7 @@ path = "src/gpui_types.rs"
 accesskit.workspace = true
 collections.workspace = true
 anyhow.workspace = true
+futures.workspace = true
 gpui_shared_string.workspace = true
 schemars.workspace = true
 seahash = "4.1"

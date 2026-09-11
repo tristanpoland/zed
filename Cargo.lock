@@ -7800,6 +7800,7 @@ dependencies = [
  "anyhow",
  "async-task",
  "collections",
+ "futures 0.3.32",
  "gpui_shared_string",
  "scheduler",
  "schemars 1.0.4",
