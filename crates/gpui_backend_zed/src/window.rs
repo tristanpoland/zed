@@ -12,17 +12,18 @@ use crate::{
     EntityId, EventEmitter, FileDropEvent, FontId, Global, GlobalElementId, GlyphId, GpuSpecs,
     Hsla, InputHandler, IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke,
     KeystrokeEvent, LayoutId, LineLayoutIndex, Modifiers, ModifiersChangedEvent, MonochromeSprite,
-    MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAtlas,
-    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformTextInputSpi, PlatformWindow,
-    Point, PolychromeSprite, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
-    RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
-    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow, SharedString, Size,
-    StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
-    SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task, TextInputConfiguration,
-    TextInputStateChange, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
-    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
-    WindowBounds, WindowControls, WindowDecorations, WindowOptions, WindowParams, WindowTextSystem,
-    point, prelude::*, px, rems, size, transparent_black,
+    MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAccessibilitySpi,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformTextInputSpi,
+    PlatformWindow, Point, PolychromeSprite, Priority, PromptButton, PromptLevel, Quad, Render,
+    RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge,
+    SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow,
+    SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription,
+    SystemWindowTab, SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task,
+    TextInputConfiguration, TextInputStateChange, TextRenderingMode, TextStyle,
+    TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
+    WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems, size,
+    transparent_black,
 };
 
 use crate::gestures::{GestureTuning, RecognizedTouchGesture, TouchGestureRecognizer};
@@ -1604,28 +1605,31 @@ impl Window {
             let (action_sender, action_receiver) =
                 async_channel::unbounded::<accesskit::ActionRequest>();
 
-            platform_window.a11y_init(crate::A11yCallbacks {
-                activation: {
-                    let active_flag = a11y_active_flag.clone();
-                    Box::new(move || {
-                        log::info!("Accessibility activated");
-                        active_flag.store(true, SeqCst);
-                        activation_sender.send_blocking(()).log_err();
-                        Some(initial_tree.clone())
-                    })
+            PlatformAccessibilitySpi::a11y_init(
+                platform_window.as_ref(),
+                crate::A11yCallbacks {
+                    activation: {
+                        let active_flag = a11y_active_flag.clone();
+                        Box::new(move || {
+                            log::info!("Accessibility activated");
+                            active_flag.store(true, SeqCst);
+                            activation_sender.send_blocking(()).log_err();
+                            Some(initial_tree.clone())
+                        })
+                    },
+                    action: Box::new(move |request| {
+                        action_sender.send_blocking(request).log_err();
+                    }),
+                    deactivation: {
+                        let active_flag = a11y_active_flag.clone();
+                        Box::new(move || {
+                            log::info!("Accessibility deactivated");
+                            active_flag.store(false, SeqCst);
+                            deactivation_sender.send_blocking(()).log_err();
+                        })
+                    },
                 },
-                action: Box::new(move |request| {
-                    action_sender.send_blocking(request).log_err();
-                }),
-                deactivation: {
-                    let active_flag = a11y_active_flag.clone();
-                    Box::new(move || {
-                        log::info!("Accessibility deactivated");
-                        active_flag.store(false, SeqCst);
-                        deactivation_sender.send_blocking(()).log_err();
-                    })
-                },
-            });
+            );
 
             // A11y can be activated at any time, and so we cannot compute a
             // correct `TreeUpdate` on-demand. When this happens, we return a
@@ -2616,6 +2620,7 @@ impl Window {
         self.display_id = self.platform_window.display().map(|display| display.id());
         self.mouse_position = self.platform_window.mouse_position();
 
+        PlatformAccessibilitySpi::a11y_update_window_bounds(self.platform_window.as_ref());
         self.refresh();
 
         self.bounds_observers
@@ -3448,7 +3453,10 @@ impl Window {
                     "Sending a11y tree update: {} nodes",
                     tree_update.nodes.len()
                 );
-                self.platform_window.a11y_tree_update(tree_update);
+                PlatformAccessibilitySpi::a11y_tree_update(
+                    self.platform_window.as_ref(),
+                    tree_update,
+                );
             }
         }
     }

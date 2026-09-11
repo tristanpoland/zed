@@ -1026,7 +1026,9 @@ impl PlatformWindow for WindowsWindow {
         // MB_OK: The sound specified as the Windows Default Beep sound.
         let _ = unsafe { MessageBeep(MB_OK) };
     }
+}
 
+impl gpui::PlatformAccessibilitySpi for WindowsWindow {
     fn a11y_init(&self, callbacks: gpui::A11yCallbacks) {
         let action_handler = A11yActionHandler(callbacks.action);
         let is_focused = unsafe { GetForegroundWindow() } == self.0.hwnd;
@@ -1047,7 +1049,7 @@ impl PlatformWindow for WindowsWindow {
         });
     }
 
-    fn a11y_tree_update(&self, tree_update: accesskit::TreeUpdate) {
+    fn a11y_tree_update(&self, tree_update: gpui::TreeUpdate) {
         let events = {
             let mut a11y = self.state.a11y.borrow_mut();
             a11y.as_mut()

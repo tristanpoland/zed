@@ -580,6 +580,14 @@ impl TestAtlas {
     }
 }
 
+impl crate::PlatformAccessibilitySpi for TestWindow {
+    fn a11y_init(&self, _callbacks: crate::A11yCallbacks) {}
+
+    fn a11y_tree_update(&self, _tree_update: crate::TreeUpdate) {}
+
+    fn a11y_update_window_bounds(&self) {}
+}
+
 impl PlatformAtlas for TestAtlas {
     fn get_or_insert_with<'a>(
         &self,

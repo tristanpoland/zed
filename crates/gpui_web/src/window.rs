@@ -1009,3 +1009,11 @@ impl PlatformWindow for WebWindow {
 
     fn set_client_inset(&self, _inset: Pixels) {}
 }
+
+impl gpui::PlatformAccessibilitySpi for WebWindow {
+    fn a11y_init(&self, _callbacks: gpui::A11yCallbacks) {}
+
+    fn a11y_tree_update(&self, _tree_update: gpui::TreeUpdate) {}
+
+    fn a11y_update_window_bounds(&self) {}
+}

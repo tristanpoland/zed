@@ -2112,7 +2112,9 @@ impl PlatformWindow for WaylandWindow {
             bell.ring(surface);
         }
     }
+}
 
+impl gpui::PlatformAccessibilitySpi for WaylandWindow {
     fn a11y_init(&self, callbacks: gpui::A11yCallbacks) {
         let activation_handler = TrivialActivationHandler {
             callback: callbacks.activation,
@@ -2128,7 +2130,7 @@ impl PlatformWindow for WaylandWindow {
         self.borrow_mut().accesskit_adapter = Some(adapter);
     }
 
-    fn a11y_tree_update(&self, tree_update: accesskit::TreeUpdate) {
+    fn a11y_tree_update(&self, tree_update: gpui::TreeUpdate) {
         let mut state = self.borrow_mut();
         if let Some(adapter) = state.accesskit_adapter.as_mut() {
             adapter.update_if_active(|| tree_update);
@@ -2136,7 +2138,7 @@ impl PlatformWindow for WaylandWindow {
     }
 
     fn a11y_update_window_bounds(&self) {
-        // Wayland doesn't expose window position, so this is a no-op
+        // Wayland doesn't expose window position, so this is a no-op.
     }
 }
 

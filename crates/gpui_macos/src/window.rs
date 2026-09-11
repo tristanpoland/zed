@@ -2328,7 +2328,9 @@ impl PlatformWindow for MacWindow {
         let mut this = self.0.lock();
         this.renderer.render_to_image(scene)
     }
+}
 
+impl gpui::PlatformAccessibilitySpi for MacWindow {
     fn a11y_init(&self, callbacks: gpui::A11yCallbacks) {
         let mut lock = self.0.lock();
 
@@ -2348,7 +2350,7 @@ impl PlatformWindow for MacWindow {
         lock.accesskit_adapter = Some(adapter);
     }
 
-    fn a11y_tree_update(&self, tree_update: accesskit::TreeUpdate) {
+    fn a11y_tree_update(&self, tree_update: gpui::TreeUpdate) {
         let events = {
             let mut lock = self.0.lock();
             lock.accesskit_adapter

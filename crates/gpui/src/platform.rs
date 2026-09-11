@@ -71,6 +71,7 @@ use std::{
 use uuid::Uuid;
 
 pub use app_menu::*;
+#[allow(unused_imports)]
 pub use gpui_types::accessibility::{A11yCallbacks, PlatformAccessibilitySpi, TreeUpdate};
 use gpui_types::clipboard::{
     ClipboardEntry as SharedClipboardEntry, ClipboardItem as SharedClipboardItem,
@@ -805,7 +806,7 @@ impl WindowInsets {
 }
 
 #[expect(missing_docs)]
-pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
+pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle + PlatformAccessibilitySpi {
     fn bounds(&self) -> Bounds<Pixels>;
     fn is_maximized(&self) -> bool;
     fn window_bounds(&self) -> WindowBounds;
@@ -987,15 +988,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
 
     fn play_system_bell(&self) {}
 
-    /// Initialize the accessibility adapter with callbacks.
-    fn a11y_init(&self, _callbacks: A11yCallbacks) {}
-
-    /// Provide a TreeUpdate to the accessibility adapter.
-    fn a11y_tree_update(&self, _tree_update: TreeUpdate) {}
-
-    /// Inform the adapter of updated window bounds.
-    fn a11y_update_window_bounds(&self) {}
-
     #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
     fn as_test(&mut self) -> Option<&mut TestWindow> {
         None
@@ -1007,20 +999,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     #[cfg(any(test, feature = "test-support"))]
     fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
         anyhow::bail!("render_to_image not implemented for this platform")
-    }
-}
-
-impl PlatformAccessibilitySpi for dyn PlatformWindow {
-    fn a11y_init(&self, callbacks: A11yCallbacks) {
-        PlatformWindow::a11y_init(self, callbacks);
-    }
-
-    fn a11y_tree_update(&self, tree_update: TreeUpdate) {
-        PlatformWindow::a11y_tree_update(self, tree_update);
-    }
-
-    fn a11y_update_window_bounds(&self) {
-        PlatformWindow::a11y_update_window_bounds(self);
     }
 }
 

@@ -1942,7 +1942,9 @@ impl PlatformWindow for X11Window {
         // Volume 0% means don't increase or decrease from system volume
         let _ = self.0.xcb.bell(0);
     }
+}
 
+impl gpui::PlatformAccessibilitySpi for X11Window {
     fn a11y_init(&self, callbacks: gpui::A11yCallbacks) {
         let activation_handler = TrivialActivationHandler {
             callback: callbacks.activation,
@@ -1958,7 +1960,7 @@ impl PlatformWindow for X11Window {
         self.0.state.borrow_mut().accesskit_adapter = Some(adapter);
     }
 
-    fn a11y_tree_update(&self, tree_update: accesskit::TreeUpdate) {
+    fn a11y_tree_update(&self, tree_update: gpui::TreeUpdate) {
         let mut state = self.0.state.borrow_mut();
         if let Some(adapter) = state.accesskit_adapter.as_mut() {
             adapter.update_if_active(|| tree_update);
