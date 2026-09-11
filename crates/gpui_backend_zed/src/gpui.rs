@@ -86,8 +86,8 @@ pub mod types {
         A11yCallbacks, AccessibleAction, ActionData, ActionRequest, AnyEntity, AnyWeakEntity, App,
         AppContextCore, AppContextObserve, AppContextRead, AppContextRuntime, AppContextSpawn,
         AppContextSpi,
-        AppContextUpdate, AppContextWindow, AnyWindowHandle, AppLifecyclePhase, AsKeystroke, Autocapitalize,
-        BackendSpi, BackgroundExecutorSpi,
+        AppContextUpdate, AppContextWindow, AnyWindowHandle, AppLifecyclePhase, AsKeystroke,
+        Autocapitalize, BackendSpi, BackgroundExecutorSpi, BorderStyle, DrawOrder, PaddedBool32,
         Context, ContextListener, ContextObserve, ContextSpawn, ContextSpi, CursorStyle,
         DispatcherSpi, Entity,
         EntityHandle, EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi,
@@ -102,7 +102,7 @@ pub mod types {
         TextInputAction, TextInputConfiguration, TextInputStateChange, Tree, TreeId, TreeUpdate,
         UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle, WindowHandle, WindowId,
         WindowRootReadSpi, accessibility, clipboard,
-        color, geometry, input, input_method, keyboard, keystroke, platform, window,
+        color, geometry, input, input_method, keyboard, keystroke, platform, rendering, window,
     };
 }
 
@@ -141,7 +141,10 @@ pub use global::*;
 pub use gpui_macros::{
     AppContext, IntoElement, Render, VisualContext, bench, property_test, register_action, test,
 };
-pub use gpui_types::{BackgroundExecutorSpi, DispatcherSpi, ForegroundExecutorSpi, RuntimeSpi};
+pub use gpui_types::{
+    BackgroundExecutorSpi, BorderStyle, DispatcherSpi, DrawOrder, ForegroundExecutorSpi,
+    PaddedBool32, RuntimeSpi,
+};
 pub use gpui_types::accessibility::{
     A11yCallbacks, AccessibleAction, ActionData, ActionRequest, Node, NodeId, Orientation,
     PlatformAccessibilitySpi, Role, Toggled, Tree, TreeId, TreeUpdate,

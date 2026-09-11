@@ -1,13 +1,12 @@
 // todo("windows"): remove
 #![cfg_attr(windows, allow(dead_code))]
 
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
 use crate::{
-    AtlasTextureId, AtlasTile, Background, Bounds, ContentMask, Corners, Edges, Hsla, Pixels,
+    AtlasTextureId, AtlasTile, Background, BorderStyle, Bounds, ContentMask, Corners, Edges, Hsla,
+    Pixels,
     Point, Radians, ScaledPixels, Size, bounds_tree::BoundsTree, point,
 };
+use gpui_types::{DrawOrder, PaddedBool32};
 use std::{
     fmt::Debug,
     iter::Peekable,
@@ -18,23 +17,6 @@ use std::{
 #[allow(non_camel_case_types, unused)]
 #[expect(missing_docs)]
 pub type PathVertex_ScaledPixels = PathVertex<ScaledPixels>;
-
-#[expect(missing_docs)]
-pub type DrawOrder = u32;
-
-/// A boolean stored as a `u32` so that GPU-facing structs contain no
-/// compiler-inserted padding bytes, which would be undefined behavior to
-/// reinterpret as `&[u8]` when writing instance buffers. Guaranteed to be
-/// `0` or `1` by construction; shaders read it as a `u32`/`uint`.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct PaddedBool32(u32);
-
-impl From<bool> for PaddedBool32 {
-    fn from(value: bool) -> Self {
-        PaddedBool32(value as u32)
-    }
-}
 
 #[derive(Default)]
 #[expect(missing_docs)]
@@ -589,17 +571,6 @@ impl From<Shadow> for Primitive {
     fn from(shadow: Shadow) -> Self {
         Primitive::Shadow(shadow)
     }
-}
-
-/// The style of a border.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
-#[repr(C)]
-pub enum BorderStyle {
-    /// A solid border.
-    #[default]
-    Solid = 0,
-    /// A dashed border.
-    Dashed = 1,
 }
 
 /// A data type representing a 2 dimensional transformation that can be applied to an element.
