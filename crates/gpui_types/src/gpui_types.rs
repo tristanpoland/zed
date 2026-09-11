@@ -1808,6 +1808,7 @@ pub mod platform {
 
 pub mod accessibility;
 pub mod application;
+pub mod backend;
 pub mod clipboard;
 pub mod context;
 pub mod credentials;
@@ -1826,6 +1827,7 @@ pub use accessibility::{
     Toggled, Tree, TreeId, TreeUpdate,
 };
 pub use application::*;
+pub use backend::*;
 pub use clipboard::*;
 pub use color::*;
 pub use context::*;

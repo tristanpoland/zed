@@ -871,6 +871,36 @@ pub trait PlatformDispatcher: Send + Sync {
     }
 }
 
+impl gpui_types::DispatcherSpi for dyn PlatformDispatcher {
+    type Runnable = RunnableVariant;
+    type Priority = Priority;
+
+    fn dispatch(&self, runnable: Self::Runnable, priority: Self::Priority) {
+        PlatformDispatcher::dispatch(self, runnable, priority);
+    }
+
+    fn dispatch_on_main_thread(&self, runnable: Self::Runnable, priority: Self::Priority) {
+        PlatformDispatcher::dispatch_on_main_thread(self, runnable, priority);
+    }
+
+    fn dispatch_after(&self, duration: Duration, runnable: Self::Runnable) {
+        PlatformDispatcher::dispatch_after(self, duration, runnable);
+    }
+
+    fn dispatch_on_main_thread_when_idle(
+        &self,
+        runnable: Self::Runnable,
+        _priority: Self::Priority,
+        timeout: Option<Duration>,
+    ) {
+        PlatformDispatcher::dispatch_on_main_thread_when_idle(self, runnable, timeout);
+    }
+
+    fn spawn_realtime(&self, task: Box<dyn FnOnce() + Send>) {
+        PlatformDispatcher::spawn_realtime(self, task);
+    }
+}
+
 #[expect(missing_docs)]
 pub trait PlatformTextSystem: Send + Sync {
     fn add_fonts(&self, fonts: Vec<Cow<'static, [u8]>>) -> Result<()>;

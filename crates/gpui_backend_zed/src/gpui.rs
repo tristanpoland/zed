@@ -21,6 +21,7 @@ mod debug_overlay;
 mod element;
 mod elements;
 mod executor;
+mod runtime;
 mod platform_scheduler;
 pub(crate) use platform_scheduler::PlatformScheduler;
 mod geometry;
@@ -86,7 +87,9 @@ pub mod types {
         A11yCallbacks, AccessibleAction, ActionData, ActionRequest, AnyEntity, AnyWeakEntity, App,
         AppContextObserve, AppContextRead, AppContextRuntime, AppContextSpawn, AppContextSpi,
         AppContextUpdate, AppContextWindow, AppLifecyclePhase, AsKeystroke, Autocapitalize,
-        Context, ContextListener, ContextObserve, ContextSpawn, ContextSpi, CursorStyle, Entity,
+        BackendSpi, BackgroundExecutorSpi,
+        Context, ContextListener, ContextObserve, ContextSpawn, ContextSpi, CursorStyle,
+        DispatcherSpi, Entity,
         EntityHandle, EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi,
         InvalidKeystrokeError, KeybindingKeystroke, Keystroke, Node, NodeId, Orientation,
         PathPromptOptions, PlatformAccessibilitySpi, PlatformApplicationSpi,
@@ -94,7 +97,8 @@ pub mod types {
         PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi, PlatformServicesSpi,
         PlatformSystemNotificationSpi, PlatformTextInputSpi, PlatformUrlSpi, PlatformWindowSpi,
         PlatformWindowingSpi, RequestFrameOptions, Role, StrongEntityHandle, SubscriptionHandle,
-        SystemNotification, SystemNotificationAction, SystemNotificationResponse, TaskHandle,
+        SystemNotification, SystemNotificationAction, SystemNotificationResponse, RuntimeSpi,
+        TaskHandle,
         TextInputAction, TextInputConfiguration, TextInputStateChange, Tree, TreeId, TreeUpdate,
         UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle, accessibility, clipboard,
         color, geometry, input, input_method, keyboard, keystroke, platform, window,
@@ -129,12 +133,14 @@ pub use debug_overlay::*;
 pub use element::*;
 pub use elements::*;
 pub use executor::*;
+pub use runtime::Runtime;
 pub use geometry::*;
 pub use gestures::*;
 pub use global::*;
 pub use gpui_macros::{
     AppContext, IntoElement, Render, VisualContext, bench, property_test, register_action, test,
 };
+pub use gpui_types::{BackgroundExecutorSpi, DispatcherSpi, ForegroundExecutorSpi, RuntimeSpi};
 pub use gpui_types::accessibility::{
     A11yCallbacks, AccessibleAction, ActionData, ActionRequest, Node, NodeId, Orientation,
     PlatformAccessibilitySpi, Role, Toggled, Tree, TreeId, TreeUpdate,

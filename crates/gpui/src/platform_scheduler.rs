@@ -109,8 +109,11 @@ impl Scheduler for PlatformScheduler {
     fn schedule_local(&self, _session_id: SessionId, runnable: Runnable<RunnableMeta>) {
         #[cfg(feature = "profiler")]
         self.foreground_runnables.queued();
-        self.dispatcher
-            .dispatch_on_main_thread(runnable, Priority::default());
+        gpui_types::DispatcherSpi::dispatch_on_main_thread(
+            self.dispatcher.as_ref(),
+            runnable,
+            Priority::default(),
+        );
     }
 
     fn schedule_background_with_priority(
@@ -118,11 +121,11 @@ impl Scheduler for PlatformScheduler {
         runnable: Runnable<RunnableMeta>,
         priority: Priority,
     ) {
-        self.dispatcher.dispatch(runnable, priority);
+        gpui_types::DispatcherSpi::dispatch(self.dispatcher.as_ref(), runnable, priority);
     }
 
     fn spawn_realtime(&self, f: Box<dyn FnOnce() + Send>) {
-        self.dispatcher.spawn_realtime(f);
+        gpui_types::DispatcherSpi::spawn_realtime(self.dispatcher.as_ref(), f);
     }
 
     #[track_caller]
@@ -142,7 +145,11 @@ impl Scheduler for PlatformScheduler {
                     let _ = tx.send(());
                 },
                 move |runnable| {
-                    dispatcher.dispatch_after(duration, runnable);
+                    gpui_types::DispatcherSpi::dispatch_after(
+                        dispatcher.as_ref(),
+                        duration,
+                        runnable,
+                    );
                 },
             );
         runnable.schedule();

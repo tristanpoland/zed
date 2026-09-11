@@ -18,6 +18,7 @@ use futures::{Future, FutureExt, channel::oneshot, future::LocalBoxFuture};
 use itertools::Itertools;
 use parking_lot::RwLock;
 use slotmap::SlotMap;
+use gpui_types::RuntimeSpi;
 
 pub use async_context::*;
 #[cfg(feature = "bench-support")]
@@ -790,8 +791,9 @@ impl App {
         asset_source: Arc<dyn AssetSource>,
         http_client: Arc<dyn HttpClient>,
     ) -> Rc<AppCell> {
-        let background_executor = platform.background_executor();
-        let foreground_executor = platform.foreground_executor();
+        let runtime = platform.runtime();
+        let background_executor = runtime.background_executor().clone();
+        let foreground_executor = runtime.foreground_executor().clone();
         assert!(
             background_executor.is_main_thread(),
             "must construct App on main thread"

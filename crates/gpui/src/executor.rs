@@ -17,6 +17,7 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
+use gpui_types::{BackgroundExecutorSpi, ForegroundExecutorSpi};
 
 pub use scheduler::{
     DedicatedExecutor, FallibleTask, LocalExecutor as SchedulerLocalExecutor, Priority,
@@ -478,7 +479,12 @@ impl ForegroundExecutor {
                 if let Some(foreground_runnables) = &foreground_runnables {
                     foreground_runnables.queued();
                 }
-                dispatcher.dispatch_on_main_thread_when_idle(runnable, timeout);
+                gpui_types::DispatcherSpi::dispatch_on_main_thread_when_idle(
+                    dispatcher.as_ref(),
+                    runnable,
+                    Priority::Low,
+                    timeout,
+                );
             })
             .into()
     }
@@ -539,6 +545,76 @@ impl ForegroundExecutor {
     #[doc(hidden)]
     pub fn scheduler_executor(&self) -> SchedulerLocalExecutor {
         self.inner.clone()
+    }
+}
+
+impl BackgroundExecutorSpi for BackgroundExecutor {
+    type Task<T> = Task<T>;
+    type Priority = Priority;
+    type Instant = Instant;
+
+    fn spawn<R>(&self, future: impl Future<Output = R> + Send + 'static) -> Self::Task<R>
+    where
+        R: Send + 'static,
+    {
+        BackgroundExecutor::spawn(self, future)
+    }
+
+    fn spawn_with_priority<R>(
+        &self,
+        priority: Self::Priority,
+        future: impl Future<Output = R> + Send + 'static,
+    ) -> Self::Task<R>
+    where
+        R: Send + 'static,
+    {
+        BackgroundExecutor::spawn_with_priority(self, priority, future)
+    }
+
+    fn timer(&self, duration: Duration) -> Self::Task<()> {
+        BackgroundExecutor::timer(self, duration)
+    }
+
+    fn now(&self) -> Self::Instant {
+        BackgroundExecutor::now(self)
+    }
+}
+
+impl ForegroundExecutorSpi for ForegroundExecutor {
+    type Task<T> = Task<T>;
+    type Priority = Priority;
+
+    fn spawn<R>(&self, future: impl Future<Output = R> + 'static) -> Self::Task<R>
+    where
+        R: 'static,
+    {
+        ForegroundExecutor::spawn(self, future)
+    }
+
+    fn spawn_with_priority<R>(
+        &self,
+        priority: Self::Priority,
+        future: impl Future<Output = R> + 'static,
+    ) -> Self::Task<R>
+    where
+        R: 'static,
+    {
+        ForegroundExecutor::spawn_with_priority(self, priority, future)
+    }
+
+    fn spawn_when_idle<R>(
+        &self,
+        timeout: Option<Duration>,
+        future: impl Future<Output = R> + 'static,
+    ) -> Self::Task<R>
+    where
+        R: 'static,
+    {
+        ForegroundExecutor::spawn_when_idle(self, timeout, future)
+    }
+
+    fn idle_time_remaining(&self) -> Option<Duration> {
+        ForegroundExecutor::idle_time_remaining(self)
     }
 }
 

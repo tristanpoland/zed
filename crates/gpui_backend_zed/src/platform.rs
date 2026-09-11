@@ -40,7 +40,8 @@ use crate::{
     FontId, FontMetrics, FontRun, ForegroundExecutor, GlyphId, GpuSpecs, Hsla, ImageSource, Keymap,
     LineLayout, Pixels, PlatformGestures, PlatformInput, Point, Priority, RenderGlyphParams,
     RenderImage, RenderImageParams, RenderSvgParams, Scene, ShapedGlyph, ShapedRun, SharedString,
-    Size, SvgRenderer, SystemWindowTab, Task, Window, WindowControlArea, hash, point, px, size,
+    Runtime, Size, SvgRenderer, SystemWindowTab, Task, Window, WindowControlArea, hash, point, px,
+    size,
 };
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use anyhow::bail;
@@ -185,6 +186,11 @@ pub fn guess_compositor() -> &'static str {
 
 #[expect(missing_docs)]
 pub trait Platform: 'static {
+    /// Returns the backend-owned scheduling runtime for this platform.
+    fn runtime(&self) -> Runtime {
+        Runtime::from_executors(self.background_executor(), self.foreground_executor())
+    }
+
     fn background_executor(&self) -> BackgroundExecutor;
     fn foreground_executor(&self) -> ForegroundExecutor;
     fn text_system(&self) -> Arc<dyn PlatformTextSystem>;
@@ -1358,6 +1364,36 @@ pub trait PlatformDispatcher: Send + Sync {
     #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
     fn as_threaded(&self) -> Option<&ThreadedDispatcher> {
         None
+    }
+}
+
+impl gpui_types::DispatcherSpi for dyn PlatformDispatcher {
+    type Runnable = RunnableVariant;
+    type Priority = Priority;
+
+    fn dispatch(&self, runnable: Self::Runnable, priority: Self::Priority) {
+        PlatformDispatcher::dispatch(self, runnable, priority);
+    }
+
+    fn dispatch_on_main_thread(&self, runnable: Self::Runnable, priority: Self::Priority) {
+        PlatformDispatcher::dispatch_on_main_thread(self, runnable, priority);
+    }
+
+    fn dispatch_after(&self, duration: Duration, runnable: Self::Runnable) {
+        PlatformDispatcher::dispatch_after(self, duration, runnable);
+    }
+
+    fn dispatch_on_main_thread_when_idle(
+        &self,
+        runnable: Self::Runnable,
+        _priority: Self::Priority,
+        timeout: Option<Duration>,
+    ) {
+        PlatformDispatcher::dispatch_on_main_thread_when_idle(self, runnable, timeout);
+    }
+
+    fn spawn_realtime(&self, task: Box<dyn FnOnce() + Send>) {
+        PlatformDispatcher::spawn_realtime(self, task);
     }
 }
 
