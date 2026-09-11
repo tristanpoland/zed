@@ -66,12 +66,12 @@ use crate::{
     ClipboardReadError, CursorStyle, DispatchPhase, DisplayId, EventEmitter, ExternalDragPayload,
     FocusHandle, FocusMap, ForegroundExecutor, Global, KeyBinding, KeyContext, Keymap, Keystroke,
     LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform, PlatformDisplay,
-    PlatformKeyboardLayout, PlatformKeyboardMapper, Point, Priority,
-    PromptBuilder, PromptButton, PromptHandle, PromptLevel, Render, RenderImage,
-    RenderablePromptHandle, Reservation, ScreenCaptureSource, SharedString, SubscriberSet,
-    Subscription, SvgRenderer, SystemNotification, SystemNotificationResponse, Task,
-    TextRenderingMode, TextSystem, ThermalState, Window, WindowAppearance, WindowButtonLayout,
-    WindowHandle, WindowId, WindowInvalidator,
+    PlatformKeyboardLayout, PlatformKeyboardMapper, Point, Priority, PromptBuilder, PromptButton,
+    PromptHandle, PromptLevel, Render, RenderImage, RenderablePromptHandle, Reservation,
+    ScreenCaptureSource, SharedString, SubscriberSet, Subscription, SvgRenderer,
+    SystemNotification, SystemNotificationResponse, Task, TextRenderingMode, TextSystem,
+    ThermalState, Window, WindowAppearance, WindowButtonLayout, WindowHandle, WindowId,
+    WindowInvalidator,
     colors::{Colors, GlobalColors},
     hash, init_app_menus,
 };
@@ -1151,8 +1151,11 @@ impl App {
         invalidator: WindowInvalidator,
         entities: &FxHashSet<EntityId>,
     ) {
-        let mut tracked_entities =
-            std::mem::take(self.tracked_entities.entry(window_handle.window_id()).or_default());
+        let mut tracked_entities = std::mem::take(
+            self.tracked_entities
+                .entry(window_handle.window_id())
+                .or_default(),
+        );
         for entity in tracked_entities.iter() {
             self.window_invalidators_by_entity
                 .entry(*entity)

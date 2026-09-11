@@ -110,9 +110,9 @@ impl<V: 'static> WindowHandle<V> {
     pub fn root<C>(&self, cx: &mut C) -> C::WindowResult<C::Entity<V>>
     where
         C: crate::AppContextWindow<
-            AnyWindowHandle = AnyWindowHandle,
-            WindowHandle<V> = WindowHandle<V>,
-        >,
+                AnyWindowHandle = AnyWindowHandle,
+                WindowHandle<V> = WindowHandle<V>,
+            >,
     {
         cx.spi_read_window(self, |root_view, _| root_view)
     }
@@ -121,17 +121,13 @@ impl<V: 'static> WindowHandle<V> {
     pub fn update<C, R>(
         &self,
         cx: &mut C,
-        update: impl FnOnce(
-            &mut V,
-            &mut C::Window,
-            &mut C::WindowContext<'_, V>,
-        ) -> R,
+        update: impl FnOnce(&mut V, &mut C::Window, &mut C::WindowContext<'_, V>) -> R,
     ) -> C::WindowResult<R>
     where
         C: crate::AppContextWindow<
-            AnyWindowHandle = AnyWindowHandle,
-            WindowHandle<V> = WindowHandle<V>,
-        >,
+                AnyWindowHandle = AnyWindowHandle,
+                WindowHandle<V> = WindowHandle<V>,
+            >,
     {
         cx.spi_update_window_entity(self, update)
     }
@@ -140,9 +136,9 @@ impl<V: 'static> WindowHandle<V> {
     pub fn read<'a, C>(&self, cx: &'a C) -> C::WindowResult<&'a V>
     where
         C: crate::WindowRootReadSpi<
-            AnyWindowHandle = AnyWindowHandle,
-            WindowHandle<V> = WindowHandle<V>,
-        >,
+                AnyWindowHandle = AnyWindowHandle,
+                WindowHandle<V> = WindowHandle<V>,
+            >,
     {
         cx.spi_read_window_root(self)
     }
@@ -155,9 +151,9 @@ impl<V: 'static> WindowHandle<V> {
     ) -> C::WindowResult<R>
     where
         C: crate::AppContextWindow<
-            AnyWindowHandle = AnyWindowHandle,
-            WindowHandle<V> = WindowHandle<V>,
-        >,
+                AnyWindowHandle = AnyWindowHandle,
+                WindowHandle<V> = WindowHandle<V>,
+            >,
     {
         cx.spi_read_window_root_with(self, read_with)
     }
@@ -166,9 +162,9 @@ impl<V: 'static> WindowHandle<V> {
     pub fn entity<C>(&self, cx: &C) -> C::WindowResult<C::Entity<V>>
     where
         C: crate::AppContextWindow<
-            AnyWindowHandle = AnyWindowHandle,
-            WindowHandle<V> = WindowHandle<V>,
-        >,
+                AnyWindowHandle = AnyWindowHandle,
+                WindowHandle<V> = WindowHandle<V>,
+            >,
     {
         cx.spi_read_window(self, |root_view, _| root_view)
     }

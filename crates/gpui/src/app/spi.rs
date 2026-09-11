@@ -11,12 +11,12 @@ use crate::{
     Window, WindowHandle,
 };
 
+#[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
+use crate::VisualTestAppContext;
 #[cfg(feature = "bench-support")]
 use crate::{BenchAppContext, BenchWindowContext};
 #[cfg(any(test, feature = "test-support"))]
 use crate::{HeadlessAppContext, TestAppContext, VisualTestContext};
-#[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
-use crate::VisualTestAppContext;
 
 macro_rules! impl_app_context_window_spi {
     ($context:ty, $($impl_generics:tt)*) => {

@@ -15,10 +15,10 @@ use std::{
 use anyhow::{Context as _, Result, anyhow};
 use derive_more::{Deref, DerefMut};
 use futures::{Future, FutureExt, channel::oneshot, future::LocalBoxFuture};
+use gpui_types::RuntimeSpi;
 use itertools::Itertools;
 use parking_lot::RwLock;
 use slotmap::SlotMap;
-use gpui_types::RuntimeSpi;
 
 pub use async_context::*;
 #[cfg(feature = "bench-support")]
@@ -1153,8 +1153,11 @@ impl App {
         invalidator: WindowInvalidator,
         entities: &FxHashSet<EntityId>,
     ) {
-        let mut tracked_entities =
-            std::mem::take(self.tracked_entities.entry(window_handle.window_id()).or_default());
+        let mut tracked_entities = std::mem::take(
+            self.tracked_entities
+                .entry(window_handle.window_id())
+                .or_default(),
+        );
         for entity in tracked_entities.iter() {
             self.window_invalidators_by_entity
                 .entry(*entity)

@@ -71,6 +71,7 @@ use std::{
 use uuid::Uuid;
 
 pub use app_menu::*;
+pub use gpui_types::ActivityGuard;
 #[allow(unused_imports)]
 pub use gpui_types::accessibility::{A11yCallbacks, PlatformAccessibilitySpi, TreeUpdate};
 use gpui_types::clipboard::{
@@ -91,7 +92,6 @@ pub use gpui_types::platform::{
     PlatformCursorSpi, PlatformServicesSpi, PlatformSystemNotificationSpi, SystemNotification,
     SystemNotificationAction, SystemNotificationResponse,
 };
-pub use gpui_types::ActivityGuard;
 pub use gpui_types::urls::PlatformUrlSpi;
 pub use gpui_types::window::{
     MAX_BUTTONS_PER_SIDE, PlatformDisplaySpi, PlatformWindowSpi, PlatformWindowingSpi,

@@ -21,8 +21,8 @@ mod debug_overlay;
 mod element;
 mod elements;
 mod executor;
-mod runtime;
 mod platform_scheduler;
+mod runtime;
 pub(crate) use platform_scheduler::PlatformScheduler;
 mod geometry;
 mod gestures;
@@ -52,6 +52,7 @@ mod shared_uri;
 mod spring;
 mod style;
 mod styled;
+mod subscription;
 mod svg_renderer;
 mod tab_stop;
 mod taffy;
@@ -83,27 +84,23 @@ pub mod private {
 /// Backend-neutral public type definitions staged for the GPUI facade split.
 pub mod types {
     pub use gpui_types::{
-        A11yCallbacks, AccessibleAction, ActionData, ActionRequest, AnyEntity, AnyWeakEntity, App,
-        AppContextCore, AppContextObserve, AppContextRead, AppContextRuntime, AppContextSpawn,
-        AppContextSpi,
-        AppContextUpdate, AppContextWindow, AnyWindowHandle, AppLifecyclePhase, AsKeystroke,
-        Autocapitalize, BackendSpi, BackgroundExecutorSpi, BorderStyle, DrawOrder, PaddedBool32,
-        Context, ContextListener, ContextObserve, ContextSpawn, ContextSpi, CursorStyle,
-        DispatcherSpi, Entity,
-        EntityHandle, EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi,
-        InvalidKeystrokeError, KeybindingKeystroke, Keystroke, LayoutId, Node, NodeId, Orientation,
-        PathPromptOptions, PlatformAccessibilitySpi, PlatformApplicationSpi,
-        PlatformCredentialsSpi, PlatformCursorSpi, PlatformDisplaySpi, PlatformKeyboardLayoutSpi,
+        A11yCallbacks, AccessibleAction, ActionData, ActionRequest, AnyEntity, AnyWeakEntity,
+        AnyWindowHandle, App, AppContextCore, AppContextObserve, AppContextRead, AppContextRuntime,
+        AppContextSpawn, AppContextSpi, AppContextUpdate, AppContextWindow, AppLifecyclePhase,
+        AsKeystroke, Autocapitalize, BackendSpi, BackgroundExecutorSpi, Context, ContextListener,
+        ContextObserve, ContextSpawn, ContextSpi, CursorStyle, DispatcherSpi, Entity, EntityHandle,
+        EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi, InvalidKeystrokeError,
+        KeybindingKeystroke, Keystroke, Node, NodeId, Orientation, PathPromptOptions,
+        PlatformAccessibilitySpi, PlatformApplicationSpi, PlatformCredentialsSpi,
+        PlatformCursorSpi, PlatformDisplaySpi, PlatformKeyboardLayoutSpi,
         PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi, PlatformServicesSpi,
         PlatformSystemNotificationSpi, PlatformTextInputSpi, PlatformUrlSpi, PlatformWindowSpi,
-        PlatformWindowingSpi, RequestFrameOptions, Role, StrongEntityHandle, Subscription,
+        PlatformWindowingSpi, RequestFrameOptions, Role, RuntimeSpi, StrongEntityHandle,
         SubscriptionHandle, SystemNotification, SystemNotificationAction,
-        SystemNotificationResponse, RuntimeSpi, Task, TaskHandle,
-        TextInputAction, TextInputConfiguration, TextInputStateChange, Tree, TreeId, TreeUpdate,
-        UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle, WindowHandle, WindowId,
-        WindowRootReadSpi, accessibility, clipboard,
-        color, geometry, input, input_method, keyboard, keystroke, layout, platform, rendering,
-        window,
+        SystemNotificationResponse, Task, TaskHandle, TextInputAction, TextInputConfiguration,
+        TextInputStateChange, Tree, TreeId, TreeUpdate, UTF16Selection, VisualContextSpi,
+        WeakEntity, WeakEntityHandle, WindowHandle, WindowId, WindowRootReadSpi, accessibility,
+        clipboard, color, geometry, input, input_method, keyboard, keystroke, platform, window,
     };
 }
 
@@ -135,21 +132,18 @@ pub use debug_overlay::*;
 pub use element::*;
 pub use elements::*;
 pub use executor::*;
-pub use runtime::Runtime;
 pub use geometry::*;
 pub use gestures::*;
 pub use global::*;
 pub use gpui_macros::{
     AppContext, IntoElement, Render, VisualContext, bench, property_test, register_action, test,
 };
-pub use gpui_types::{
-    BackgroundExecutorSpi, BorderStyle, DispatcherSpi, DrawOrder, ForegroundExecutorSpi,
-    LayoutId, PaddedBool32, RuntimeSpi,
-};
 pub use gpui_types::accessibility::{
     A11yCallbacks, AccessibleAction, ActionData, ActionRequest, Node, NodeId, Orientation,
     PlatformAccessibilitySpi, Role, Toggled, Tree, TreeId, TreeUpdate,
 };
+pub use gpui_types::{BackgroundExecutorSpi, DispatcherSpi, ForegroundExecutorSpi, RuntimeSpi};
+pub use runtime::Runtime;
 pub use spring::*;
 
 /// Defines a Criterion benchmark group for benchmarks annotated with [`gpui::bench`].
@@ -196,10 +190,11 @@ pub use shared_uri::*;
 use std::future::Future;
 pub use style::*;
 pub use styled::*;
-pub use gpui_types::{SubscriberSet, Subscription};
+pub use subscription::*;
 pub use svg_renderer::*;
 pub(crate) use tab_stop::*;
-pub use taffy::AvailableSpace;
+use taffy::TaffyLayoutEngine;
+pub use taffy::{AvailableSpace, LayoutId};
 #[cfg(any(test, feature = "test-support"))]
 pub use test::*;
 pub use text_system::*;

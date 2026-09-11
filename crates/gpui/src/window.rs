@@ -14,17 +14,15 @@ use crate::{
     KeystrokeEvent, LayoutId, LineLayoutIndex, Modifiers, ModifiersChangedEvent, MonochromeSprite,
     MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAtlas,
     PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, PlatformWindowSpi, Point,
-    PolychromeSprite,
-    Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams, RenderImage,
-    RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
-    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow,
-    SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription,
-    SystemWindowTab, SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task,
-    TextInputConfiguration, TextInputStateChange, TextRenderingMode, TextStyle,
-    TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
-    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
-    WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems, size,
-    transparent_black,
+    PolychromeSprite, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
+    RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
+    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow, SharedString, Size,
+    StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
+    SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task, TextInputConfiguration,
+    TextInputStateChange, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
+    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
+    WindowBounds, WindowControls, WindowDecorations, WindowOptions, WindowParams, WindowTextSystem,
+    point, prelude::*, px, rems, size, transparent_black,
 };
 
 use crate::gestures::{GestureTuning, RecognizedTouchGesture, TouchGestureRecognizer};
@@ -1589,9 +1587,8 @@ impl Window {
         let display_id =
             PlatformWindowSpi::display(platform_window.as_ref()).map(|display| display.id());
         let sprite_atlas = platform_window.sprite_atlas();
-        let mouse_position = from_shared_point(PlatformWindowSpi::mouse_position(
-            platform_window.as_ref(),
-        ));
+        let mouse_position =
+            from_shared_point(PlatformWindowSpi::mouse_position(platform_window.as_ref()));
         let modifiers = PlatformWindowSpi::modifiers(platform_window.as_ref());
         let capslock = PlatformWindowSpi::capslock(platform_window.as_ref());
         let content_size =
@@ -1707,164 +1704,177 @@ impl Window {
                 .detach();
         }
 
-        PlatformWindowSpi::on_close(platform_window.as_ref(), Box::new({
-            let window_id = handle.window_id();
-            let mut cx = cx.to_async();
-            move || {
-                let _ = handle.update(&mut cx, |_, window, _| window.remove_window());
-                let _ = cx.update(|cx| {
-                    SystemWindowTabController::remove_tab(cx, window_id);
-                });
-            }
-        }));
-        PlatformWindowSpi::on_request_frame(platform_window.as_ref(), Box::new({
-            let mut cx = cx.to_async();
-            let invalidator = invalidator.clone();
-            let active = active.clone();
-            let needs_present = needs_present.clone();
-            let next_frame_callbacks = next_frame_callbacks.clone();
-            let input_rate_tracker = input_rate_tracker.clone();
-            let mut deferred_force_render = false;
-            move |request_frame_options| {
-                #[cfg(feature = "profiler")]
-                let _foreground_turn = profiler::journal::foreground_turn();
-                // This must be checked before anything else: if this request
-                // arrived re-entrantly while a draw is on this thread's stack
-                // (e.g. via a nested message pump in the Windows window
-                // procedure), drawing would nest draws, and even touching the
-                // App would panic on its already-mutable borrow. Skip instead;
-                // the platform leaves the window invalidated (or re-invalidates
-                // it), so a fresh request arrives once the in-progress draw
-                // unwinds. Remember force_render so the deferred frame still
-                // bypasses the view cache.
-                //
-                // Returning here skips `complete_frame`, which on Wayland would
-                // stall the window's frame callbacks (no `surface.commit()`) —
-                // but calling it would hit the App borrow panic above, and this
-                // branch is unreachable there in practice: only Windows pumps
-                // platform events (and thus requests frames) mid-draw.
-                if draw_in_progress() {
-                    log::debug!("deferring re-entrant window draw request");
-                    deferred_force_render |= request_frame_options.force_render;
-                    return;
+        PlatformWindowSpi::on_close(
+            platform_window.as_ref(),
+            Box::new({
+                let window_id = handle.window_id();
+                let mut cx = cx.to_async();
+                move || {
+                    let _ = handle.update(&mut cx, |_, window, _| window.remove_window());
+                    let _ = cx.update(|cx| {
+                        SystemWindowTabController::remove_tab(cx, window_id);
+                    });
                 }
-                // Take the deferred flag first: `||` short-circuits, and leaving
-                // the flag set when this request already forces a render would
-                // force a second, redundant render on the next frame.
-                let force_render =
-                    mem::take(&mut deferred_force_render) || request_frame_options.force_render;
-
-                let thermal_state = handle
-                    .update(&mut cx, |_, _, cx| cx.thermal_state())
-                    .log_err();
-
-                // Throttle frame rate based on conditions:
-                // - Thermal pressure (Serious/Critical): cap to ~60fps
-                // - Inactive window (not focused): cap to ~30fps to save energy
-                let min_frame_interval = if request_frame_options.require_presentation
-                    || (!request_frame_options.force_render
-                        && next_frame_callbacks.borrow().is_empty())
-                {
-                    None
-                } else if !active.get() && !input_rate_tracker.borrow_mut().is_high_rate() {
-                    inactive_frame_interval
-                } else if let Some(ThermalState::Critical | ThermalState::Serious) = thermal_state {
-                    Some(Duration::from_micros(16667))
-                } else {
-                    None
-                };
-
-                let now = Instant::now();
-                if let Some(min_interval) = min_frame_interval {
-                    if let Some(last_frame) = last_frame_time.get()
-                        && now.duration_since(last_frame) < min_interval
-                    {
-                        // Don't lose a pending forced render to throttling.
-                        deferred_force_render |= force_render;
-                        // Deferred by throttling: ask demand-driven platforms to retry.
-                        handle
-                            .update(&mut cx, |_, window, _| {
-                                PlatformWindowSpi::schedule_frame(window.platform_window.as_ref());
-                            })
-                            .log_err();
-                        // The demand that entered this branch (a deferred forced
-                        // render or pending next-frame callbacks) is still
-                        // unserved; platforms that stop requesting frames for
-                        // idle windows need a wakeup to deliver the retry.
-                        invalidator.wake_platform();
+            }),
+        );
+        PlatformWindowSpi::on_request_frame(
+            platform_window.as_ref(),
+            Box::new({
+                let mut cx = cx.to_async();
+                let invalidator = invalidator.clone();
+                let active = active.clone();
+                let needs_present = needs_present.clone();
+                let next_frame_callbacks = next_frame_callbacks.clone();
+                let input_rate_tracker = input_rate_tracker.clone();
+                let mut deferred_force_render = false;
+                move |request_frame_options| {
+                    #[cfg(feature = "profiler")]
+                    let _foreground_turn = profiler::journal::foreground_turn();
+                    // This must be checked before anything else: if this request
+                    // arrived re-entrantly while a draw is on this thread's stack
+                    // (e.g. via a nested message pump in the Windows window
+                    // procedure), drawing would nest draws, and even touching the
+                    // App would panic on its already-mutable borrow. Skip instead;
+                    // the platform leaves the window invalidated (or re-invalidates
+                    // it), so a fresh request arrives once the in-progress draw
+                    // unwinds. Remember force_render so the deferred frame still
+                    // bypasses the view cache.
+                    //
+                    // Returning here skips `complete_frame`, which on Wayland would
+                    // stall the window's frame callbacks (no `surface.commit()`) —
+                    // but calling it would hit the App borrow panic above, and this
+                    // branch is unreachable there in practice: only Windows pumps
+                    // platform events (and thus requests frames) mid-draw.
+                    if draw_in_progress() {
+                        log::debug!("deferring re-entrant window draw request");
+                        deferred_force_render |= request_frame_options.force_render;
                         return;
                     }
-                }
-                last_frame_time.set(Some(now));
+                    // Take the deferred flag first: `||` short-circuits, and leaving
+                    // the flag set when this request already forces a render would
+                    // force a second, redundant render on the next frame.
+                    let force_render =
+                        mem::take(&mut deferred_force_render) || request_frame_options.force_render;
 
-                let pending_next_frame_callbacks = next_frame_callbacks.take();
-                if !pending_next_frame_callbacks.is_empty() {
+                    let thermal_state = handle
+                        .update(&mut cx, |_, _, cx| cx.thermal_state())
+                        .log_err();
+
+                    // Throttle frame rate based on conditions:
+                    // - Thermal pressure (Serious/Critical): cap to ~60fps
+                    // - Inactive window (not focused): cap to ~30fps to save energy
+                    let min_frame_interval = if request_frame_options.require_presentation
+                        || (!request_frame_options.force_render
+                            && next_frame_callbacks.borrow().is_empty())
+                    {
+                        None
+                    } else if !active.get() && !input_rate_tracker.borrow_mut().is_high_rate() {
+                        inactive_frame_interval
+                    } else if let Some(ThermalState::Critical | ThermalState::Serious) =
+                        thermal_state
+                    {
+                        Some(Duration::from_micros(16667))
+                    } else {
+                        None
+                    };
+
+                    let now = Instant::now();
+                    if let Some(min_interval) = min_frame_interval {
+                        if let Some(last_frame) = last_frame_time.get()
+                            && now.duration_since(last_frame) < min_interval
+                        {
+                            // Don't lose a pending forced render to throttling.
+                            deferred_force_render |= force_render;
+                            // Deferred by throttling: ask demand-driven platforms to retry.
+                            handle
+                                .update(&mut cx, |_, window, _| {
+                                    PlatformWindowSpi::schedule_frame(
+                                        window.platform_window.as_ref(),
+                                    );
+                                })
+                                .log_err();
+                            // The demand that entered this branch (a deferred forced
+                            // render or pending next-frame callbacks) is still
+                            // unserved; platforms that stop requesting frames for
+                            // idle windows need a wakeup to deliver the retry.
+                            invalidator.wake_platform();
+                            return;
+                        }
+                    }
+                    last_frame_time.set(Some(now));
+
+                    let pending_next_frame_callbacks = next_frame_callbacks.take();
+                    if !pending_next_frame_callbacks.is_empty() {
+                        handle
+                            .update(&mut cx, |_, window, cx| {
+                                for callback in pending_next_frame_callbacks {
+                                    callback(window, cx);
+                                }
+                            })
+                            .log_err();
+                    }
+
+                    // Keep presenting if input was recently arriving at a high rate (>= 60fps).
+                    // Once high-rate input is detected, we sustain presentation for 1 second
+                    // to prevent display underclocking during active input.
+                    let needs_present = request_frame_options.require_presentation
+                        || needs_present.get()
+                        || input_rate_tracker.borrow_mut().is_high_rate();
+
+                    if invalidator.is_dirty() || force_render {
+                        measure("frame duration", || {
+                            handle
+                                .update(&mut cx, |_, window, cx| {
+                                    if force_render {
+                                        // Bypass cached view reuse so we don't replay stale
+                                        // atlas tile references after a GPU device recovery.
+                                        window.refresh();
+                                    }
+                                    let arena_clear_needed = window.draw(cx);
+                                    window.present();
+                                    arena_clear_needed.clear(cx);
+                                })
+                                .log_err();
+                        })
+                    } else if needs_present {
+                        handle
+                            .update(&mut cx, |_, window, _| window.present())
+                            .log_err();
+                    }
+
                     handle
-                        .update(&mut cx, |_, window, cx| {
-                            for callback in pending_next_frame_callbacks {
-                                callback(window, cx);
+                        .update(&mut cx, |_, window, _| {
+                            if window.invalidator.is_dirty()
+                                || !window.next_frame_callbacks.borrow().is_empty()
+                            {
+                                PlatformWindowSpi::schedule_frame(window.platform_window.as_ref());
                             }
                         })
                         .log_err();
+
+                    // Platforms that stop requesting frames for idle windows only
+                    // deliver another request after a wakeup. If demand remains
+                    // after this frame (the window was re-invalidated mid-draw, or
+                    // animations scheduled next-frame callbacks), re-arm the frame
+                    // source explicitly.
+                    if invalidator.is_dirty() || !next_frame_callbacks.borrow().is_empty() {
+                        invalidator.wake_platform();
+                    }
                 }
-
-                // Keep presenting if input was recently arriving at a high rate (>= 60fps).
-                // Once high-rate input is detected, we sustain presentation for 1 second
-                // to prevent display underclocking during active input.
-                let needs_present = request_frame_options.require_presentation
-                    || needs_present.get()
-                    || input_rate_tracker.borrow_mut().is_high_rate();
-
-                if invalidator.is_dirty() || force_render {
-                    measure("frame duration", || {
-                        handle
-                            .update(&mut cx, |_, window, cx| {
-                                if force_render {
-                                    // Bypass cached view reuse so we don't replay stale
-                                    // atlas tile references after a GPU device recovery.
-                                    window.refresh();
-                                }
-                                let arena_clear_needed = window.draw(cx);
-                                window.present();
-                                arena_clear_needed.clear(cx);
-                            })
-                            .log_err();
-                    })
-                } else if needs_present {
+            }),
+        );
+        invalidator.set_platform_waker(PlatformWindowSpi::frame_waker(platform_window.as_ref()));
+        PlatformWindowSpi::on_visual_viewport_changed(
+            platform_window.as_ref(),
+            Box::new({
+                let mut cx = cx.to_async();
+                move || {
                     handle
-                        .update(&mut cx, |_, window, _| window.present())
+                        .update(&mut cx, |_, window, _| window.refresh())
                         .log_err();
                 }
-
-                handle
-                    .update(&mut cx, |_, window, _| {
-                        if window.invalidator.is_dirty()
-                            || !window.next_frame_callbacks.borrow().is_empty()
-                        {
-                            PlatformWindowSpi::schedule_frame(window.platform_window.as_ref());
-                        }
-                    })
-                    .log_err();
-
-                // Platforms that stop requesting frames for idle windows only
-                // deliver another request after a wakeup. If demand remains
-                // after this frame (the window was re-invalidated mid-draw, or
-                // animations scheduled next-frame callbacks), re-arm the frame
-                // source explicitly.
-                if invalidator.is_dirty() || !next_frame_callbacks.borrow().is_empty() {
-                    invalidator.wake_platform();
-                }
-            }
-        }));
-        invalidator.set_platform_waker(PlatformWindowSpi::frame_waker(platform_window.as_ref()));
-        PlatformWindowSpi::on_visual_viewport_changed(platform_window.as_ref(), Box::new({
-            let mut cx = cx.to_async();
-            move || {
-                handle
-                    .update(&mut cx, |_, window, _| window.refresh())
-                    .log_err();
-            }
-        }));
+            }),
+        );
         platform_window.on_insets_changed(Box::new({
             let mut cx = cx.to_async();
             move |_| {
@@ -1873,80 +1883,101 @@ impl Window {
                     .log_err();
             }
         }));
-        PlatformWindowSpi::on_resize(platform_window.as_ref(), Box::new({
-            let mut cx = cx.to_async();
-            move |_, _| {
-                handle
-                    .update(&mut cx, |_, window, cx| window.bounds_changed(cx))
-                    .log_err();
-            }
-        }));
-        PlatformWindowSpi::on_moved(platform_window.as_ref(), Box::new({
-            let mut cx = cx.to_async();
-            move || {
-                handle
-                    .update(&mut cx, |_, window, cx| window.bounds_changed(cx))
-                    .log_err();
-            }
-        }));
-        PlatformWindowSpi::on_appearance_changed(platform_window.as_ref(), Box::new({
-            let cx = cx.to_async();
-            let foreground_executor = cx.foreground_executor().clone();
-            move || {
-                let mut cx = cx.clone();
-                // Defer the update because changing the AppKit appearance may
-                // synchronously invoke this callback while App is already borrowed.
-                foreground_executor
-                    .spawn(async move {
-                        handle
-                            .update(&mut cx, |_, window, cx| window.appearance_changed(cx))
-                            .log_err();
-                    })
-                    .detach();
-            }
-        }));
-        PlatformWindowSpi::on_button_layout_changed(platform_window.as_ref(), Box::new({
-            let mut cx = cx.to_async();
-            move || {
-                handle
-                    .update(&mut cx, |_, window, cx| window.button_layout_changed(cx))
-                    .log_err();
-            }
-        }));
-        PlatformWindowSpi::on_active_status_change(platform_window.as_ref(), Box::new({
-            let mut cx = cx.to_async();
-            move |active| {
-                handle
-                    .update(&mut cx, |_, window, cx| {
-                        window.active.set(active);
-                        window.modifiers =
-                            PlatformWindowSpi::modifiers(window.platform_window.as_ref());
-                        window.capslock =
-                            PlatformWindowSpi::capslock(window.platform_window.as_ref());
-                        window
-                            .activation_observers
-                            .clone()
-                            .retain(&(), |callback| callback(window, cx));
+        PlatformWindowSpi::on_resize(
+            platform_window.as_ref(),
+            Box::new({
+                let mut cx = cx.to_async();
+                move |_, _| {
+                    handle
+                        .update(&mut cx, |_, window, cx| window.bounds_changed(cx))
+                        .log_err();
+                }
+            }),
+        );
+        PlatformWindowSpi::on_moved(
+            platform_window.as_ref(),
+            Box::new({
+                let mut cx = cx.to_async();
+                move || {
+                    handle
+                        .update(&mut cx, |_, window, cx| window.bounds_changed(cx))
+                        .log_err();
+                }
+            }),
+        );
+        PlatformWindowSpi::on_appearance_changed(
+            platform_window.as_ref(),
+            Box::new({
+                let cx = cx.to_async();
+                let foreground_executor = cx.foreground_executor().clone();
+                move || {
+                    let mut cx = cx.clone();
+                    // Defer the update because changing the AppKit appearance may
+                    // synchronously invoke this callback while App is already borrowed.
+                    foreground_executor
+                        .spawn(async move {
+                            handle
+                                .update(&mut cx, |_, window, cx| window.appearance_changed(cx))
+                                .log_err();
+                        })
+                        .detach();
+                }
+            }),
+        );
+        PlatformWindowSpi::on_button_layout_changed(
+            platform_window.as_ref(),
+            Box::new({
+                let mut cx = cx.to_async();
+                move || {
+                    handle
+                        .update(&mut cx, |_, window, cx| window.button_layout_changed(cx))
+                        .log_err();
+                }
+            }),
+        );
+        PlatformWindowSpi::on_active_status_change(
+            platform_window.as_ref(),
+            Box::new({
+                let mut cx = cx.to_async();
+                move |active| {
+                    handle
+                        .update(&mut cx, |_, window, cx| {
+                            window.active.set(active);
+                            window.modifiers =
+                                PlatformWindowSpi::modifiers(window.platform_window.as_ref());
+                            window.capslock =
+                                PlatformWindowSpi::capslock(window.platform_window.as_ref());
+                            window
+                                .activation_observers
+                                .clone()
+                                .retain(&(), |callback| callback(window, cx));
 
-                        window.bounds_changed(cx);
-                        window.refresh();
+                            window.bounds_changed(cx);
+                            window.refresh();
 
-                        SystemWindowTabController::update_last_active(cx, window.handle.window_id());
-                    })
-                    .log_err();
-            }
-        }));
-        PlatformWindowSpi::on_hover_status_change(platform_window.as_ref(), Box::new({
-            let mut cx = cx.to_async();
-            move |active| {
-                handle
-                    .update(&mut cx, |_, window, _| {
-                        window.hovered.set(active);
-                        window.refresh();
-                    })
-                    .log_err();
-            }
-        }));
+                            SystemWindowTabController::update_last_active(
+                                cx,
+                                window.handle.window_id(),
+                            );
+                        })
+                        .log_err();
+                }
+            }),
+        );
+        PlatformWindowSpi::on_hover_status_change(
+            platform_window.as_ref(),
+            Box::new({
+                let mut cx = cx.to_async();
+                move |active| {
+                    handle
+                        .update(&mut cx, |_, window, _| {
+                            window.hovered.set(active);
+                            window.refresh();
+                        })
+                        .log_err();
+                }
+            }),
+        );
         platform_window.on_input({
             let mut cx = cx.to_async();
             Box::new(move |event| {
@@ -2656,8 +2687,8 @@ impl Window {
         self.viewport_size = from_shared_size(PlatformWindowSpi::content_size(
             self.platform_window.as_ref(),
         ));
-        self.display_id = PlatformWindowSpi::display(self.platform_window.as_ref())
-            .map(|display| display.id());
+        self.display_id =
+            PlatformWindowSpi::display(self.platform_window.as_ref()).map(|display| display.id());
         self.mouse_position = from_shared_point(PlatformWindowSpi::mouse_position(
             self.platform_window.as_ref(),
         ));

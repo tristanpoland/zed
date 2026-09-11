@@ -39,9 +39,9 @@ use crate::{
     DEFAULT_WINDOW_SIZE, DevicePixels, DispatchEventResult, Edges, ExternalDragPayload, Font,
     FontId, FontMetrics, FontRun, ForegroundExecutor, GlyphId, GpuSpecs, Hsla, ImageSource, Keymap,
     LineLayout, Pixels, PlatformGestures, PlatformInput, Point, Priority, RenderGlyphParams,
-    RenderImage, RenderImageParams, RenderSvgParams, Scene, ShapedGlyph, ShapedRun, SharedString,
-    Runtime, Size, SvgRenderer, SystemWindowTab, Task, Window, WindowControlArea, hash, point, px,
-    size,
+    RenderImage, RenderImageParams, RenderSvgParams, Runtime, Scene, ShapedGlyph, ShapedRun,
+    SharedString, Size, SvgRenderer, SystemWindowTab, Task, Window, WindowControlArea, hash, point,
+    px, size,
 };
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use anyhow::bail;
@@ -72,6 +72,7 @@ use std::{
 use uuid::Uuid;
 
 pub use app_menu::*;
+pub use gpui_types::ActivityGuard;
 #[allow(unused_imports)]
 pub use gpui_types::accessibility::{A11yCallbacks, PlatformAccessibilitySpi, TreeUpdate};
 use gpui_types::clipboard::{
@@ -91,7 +92,6 @@ pub use gpui_types::platform::{
     PlatformCursorSpi, PlatformServicesSpi, PlatformSystemNotificationSpi, SystemNotification,
     SystemNotificationAction, SystemNotificationResponse,
 };
-pub use gpui_types::ActivityGuard;
 pub use gpui_types::urls::PlatformUrlSpi;
 pub use gpui_types::window::{
     MAX_BUTTONS_PER_SIDE, PlatformDisplaySpi, PlatformWindowSpi, PlatformWindowingSpi,

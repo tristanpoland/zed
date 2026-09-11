@@ -1894,7 +1894,10 @@ impl Window {
                         window.bounds_changed(cx);
                         window.refresh();
 
-                        SystemWindowTabController::update_last_active(cx, window.handle.window_id());
+                        SystemWindowTabController::update_last_active(
+                            cx,
+                            window.handle.window_id(),
+                        );
                     })
                     .log_err();
             }

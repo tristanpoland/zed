@@ -116,11 +116,7 @@ pub trait AppContextWindow {
     fn spi_update_window_entity<T, R>(
         &mut self,
         window: &crate::WindowHandle<T>,
-        update: impl FnOnce(
-            &mut T,
-            &mut Self::Window,
-            &mut Self::WindowContext<'_, T>,
-        ) -> R,
+        update: impl FnOnce(&mut T, &mut Self::Window, &mut Self::WindowContext<'_, T>) -> R,
     ) -> Self::WindowResult<R>
     where
         T: 'static;

@@ -11,12 +11,12 @@ use crate::{
     Task, WeakEntity, Window, WindowHandle,
 };
 
+#[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
+use crate::VisualTestAppContext;
 #[cfg(feature = "bench-support")]
 use crate::{BenchAppContext, BenchWindowContext};
 #[cfg(any(test, feature = "test-support"))]
 use crate::{HeadlessAppContext, TestAppContext, VisualTestContext};
-#[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
-use crate::VisualTestAppContext;
 
 impl AppContextCore for App {
     type Entity<T> = Entity<T>;
