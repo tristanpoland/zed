@@ -30,6 +30,11 @@
 //! to construct `components`, using the [`RenderOnce`] trait and the `#[derive(IntoElement)]` macro. Only implement
 //! elements when you need to take manual control of the layout and painting process, such as when using
 //! your own custom layout algorithm or rendering a code editor.
+//!
+//! The public element traits remain runtime-specific while their signatures name [`Window`], [`App`],
+//! [`Context`], layout values, and the accessibility builder. Moving those methods into `gpui_types`
+//! without changing custom element implementations would require sharing those implementation-owned
+//! types or changing the API. Element identities are shared independently through `gpui_types`.
 
 use crate::{
     A11ySubtreeBuilder, App, ArenaBox, AvailableSpace, Bounds, Context, DispatchNodeId, ElementId,

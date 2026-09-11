@@ -1,6 +1,187 @@
 //! Backend-neutral element path and inspector metadata.
 
-use std::{fmt::Display, ops::{Deref, DerefMut}, sync::Arc};
+use gpui_shared_string::SharedString;
+use std::{
+    fmt::Display,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
+
+/// An identifier for an element.
+///
+/// The focus identifier is supplied by the backend because focus handles are
+/// owned by the window implementation. All other identity forms are shared
+/// between GPUI API facades and backends.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum ElementId<F> {
+    /// The ID of a view element.
+    View(crate::EntityId),
+    /// An integer ID.
+    Integer(u64),
+    /// A string-based ID.
+    Name(SharedString),
+    /// A UUID.
+    Uuid(uuid::Uuid),
+    /// An ID associated with a focus handle.
+    FocusHandle(F),
+    /// A combination of a name and an integer.
+    NamedInteger(SharedString, u64),
+    /// A path.
+    Path(Arc<std::path::Path>),
+    /// A code location.
+    CodeLocation(core::panic::Location<'static>),
+    /// A labeled child of an element.
+    NamedChild(Arc<ElementId<F>>, SharedString),
+    /// A byte-array ID (used for text anchors).
+    OpaqueId([u8; 20]),
+}
+
+impl<F> ElementId<F> {
+    /// Constructs an `ElementId::NamedInteger` from a name and `usize`.
+    pub fn named_usize(name: impl Into<SharedString>, integer: usize) -> Self {
+        Self::NamedInteger(name.into(), integer as u64)
+    }
+}
+
+impl<F> Display for ElementId<F> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::View(entity_id) => write!(formatter, "view-{entity_id}")?,
+            Self::Integer(integer) => write!(formatter, "{integer}")?,
+            Self::Name(name) => write!(formatter, "{name}")?,
+            Self::FocusHandle(_) => write!(formatter, "FocusHandle")?,
+            Self::NamedInteger(name, integer) => write!(formatter, "{name}-{integer}")?,
+            Self::Uuid(uuid) => write!(formatter, "{uuid}")?,
+            Self::Path(path) => write!(formatter, "{}", path.display())?,
+            Self::CodeLocation(location) => write!(formatter, "{location}")?,
+            Self::NamedChild(id, name) => write!(formatter, "{id}-{name}")?,
+            Self::OpaqueId(opaque_id) => write!(formatter, "{opaque_id:x?}")?,
+        }
+        Ok(())
+    }
+}
+
+impl<F> TryInto<SharedString> for ElementId<F> {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> anyhow::Result<SharedString> {
+        if let Self::Name(name) = self {
+            Ok(name)
+        } else {
+            anyhow::bail!("element id is not string")
+        }
+    }
+}
+
+impl<F> From<usize> for ElementId<F> {
+    fn from(id: usize) -> Self {
+        Self::Integer(id as u64)
+    }
+}
+
+impl<F> From<i32> for ElementId<F> {
+    fn from(id: i32) -> Self {
+        Self::Integer(id as u64)
+    }
+}
+
+impl<F> From<SharedString> for ElementId<F> {
+    fn from(name: SharedString) -> Self {
+        Self::Name(name)
+    }
+}
+
+impl<F> From<String> for ElementId<F> {
+    fn from(name: String) -> Self {
+        Self::Name(name.into())
+    }
+}
+
+impl<F> From<Arc<str>> for ElementId<F> {
+    fn from(name: Arc<str>) -> Self {
+        Self::Name(name.into())
+    }
+}
+
+impl<F> From<Arc<std::path::Path>> for ElementId<F> {
+    fn from(path: Arc<std::path::Path>) -> Self {
+        Self::Path(path)
+    }
+}
+
+impl<F> From<&'static str> for ElementId<F> {
+    fn from(name: &'static str) -> Self {
+        Self::Name(SharedString::new_static(name))
+    }
+}
+
+impl<F> From<(&'static str, crate::EntityId)> for ElementId<F> {
+    fn from((name, id): (&'static str, crate::EntityId)) -> Self {
+        Self::NamedInteger(SharedString::new_static(name), id.as_u64())
+    }
+}
+
+impl<F> From<(&'static str, usize)> for ElementId<F> {
+    fn from((name, id): (&'static str, usize)) -> Self {
+        Self::NamedInteger(SharedString::new_static(name), id as u64)
+    }
+}
+
+impl<F> From<(SharedString, usize)> for ElementId<F> {
+    fn from((name, id): (SharedString, usize)) -> Self {
+        Self::NamedInteger(name, id as u64)
+    }
+}
+
+impl<F> From<(&'static str, u64)> for ElementId<F> {
+    fn from((name, id): (&'static str, u64)) -> Self {
+        Self::NamedInteger(SharedString::new_static(name), id)
+    }
+}
+
+impl<F> From<uuid::Uuid> for ElementId<F> {
+    fn from(value: uuid::Uuid) -> Self {
+        Self::Uuid(value)
+    }
+}
+
+impl<F> From<(&'static str, u32)> for ElementId<F> {
+    fn from((name, id): (&'static str, u32)) -> Self {
+        Self::NamedInteger(SharedString::new_static(name), u64::from(id))
+    }
+}
+
+impl<F, T: Into<SharedString>> From<(ElementId<F>, T)> for ElementId<F> {
+    fn from((id, name): (ElementId<F>, T)) -> Self {
+        Self::NamedChild(Arc::new(id), name.into())
+    }
+}
+
+impl<F> From<&'static core::panic::Location<'static>> for ElementId<F> {
+    fn from(location: &'static core::panic::Location<'static>) -> Self {
+        Self::CodeLocation(*location)
+    }
+}
+
+impl<F> From<[u8; 20]> for ElementId<F> {
+    fn from(opaque_id: [u8; 20]) -> Self {
+        Self::OpaqueId(opaque_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ElementId;
+
+    #[test]
+    fn element_id_constructors_preserve_display_and_nesting() {
+        let parent = ElementId::<()>::from("parent");
+        let child = ElementId::from((parent, "child"));
+
+        assert_eq!(child.to_string(), "parent-child");
+        assert_eq!(ElementId::<()>::from(42usize).to_string(), "42");
+    }
+}
 
 /// A globally unique element path used to track state across frames.
 pub struct GlobalElementId<I>(Arc<[I]>);
