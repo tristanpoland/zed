@@ -807,7 +807,9 @@ impl WindowInsets {
 }
 
 #[expect(missing_docs)]
-pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle + PlatformAccessibilitySpi {
+pub trait PlatformWindow:
+    HasWindowHandle + HasDisplayHandle + PlatformAccessibilitySpi + PlatformTextInputSpi
+{
     fn bounds(&self) -> Bounds<Pixels>;
     fn is_maximized(&self) -> bool;
     fn window_bounds(&self) -> WindowBounds;
@@ -841,11 +843,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle + PlatformAccessibi
     fn capslock(&self) -> Capslock;
     fn set_input_handler(&mut self, input_handler: PlatformInputHandler);
     fn take_input_handler(&mut self) -> Option<PlatformInputHandler>;
-    /// Apply the focused text region's [`TextInputConfiguration`] to the
-    /// platform's text input session (e.g. attributes of the hidden editable
-    /// element on web). Called only when the configuration changes, because
-    /// reconfiguring a live input session can restart the IME connection.
-    fn set_text_input_configuration(&mut self, _configuration: TextInputConfiguration) {}
     fn prompt(
         &self,
         level: PromptLevel,
@@ -984,9 +981,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle + PlatformAccessibi
     /// Requests that the soft keyboard be hidden.
     fn hide_soft_keyboard(&self) {}
 
-    /// Inform the operating system that the text input state has changed
-    fn text_input_state_changed(&self, _change: TextInputStateChange) {}
-
     fn play_system_bell(&self) {}
 
     #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
@@ -1000,16 +994,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle + PlatformAccessibi
     #[cfg(any(test, feature = "test-support"))]
     fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
         anyhow::bail!("render_to_image not implemented for this platform")
-    }
-}
-
-impl PlatformTextInputSpi for dyn PlatformWindow {
-    fn set_text_input_configuration(&mut self, configuration: TextInputConfiguration) {
-        PlatformWindow::set_text_input_configuration(self, configuration);
-    }
-
-    fn text_input_state_changed(&self, change: TextInputStateChange) {
-        PlatformWindow::text_input_state_changed(self, change);
     }
 }
 

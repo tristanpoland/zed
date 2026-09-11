@@ -1028,6 +1028,12 @@ impl PlatformWindow for WindowsWindow {
     }
 }
 
+impl gpui::PlatformTextInputSpi for WindowsWindow {
+    fn set_text_input_configuration(&mut self, _configuration: gpui::TextInputConfiguration) {}
+
+    fn text_input_state_changed(&self, _change: gpui::TextInputStateChange) {}
+}
+
 impl gpui::PlatformAccessibilitySpi for WindowsWindow {
     fn a11y_init(&self, callbacks: gpui::A11yCallbacks) {
         let action_handler = A11yActionHandler(callbacks.action);

@@ -2114,6 +2114,12 @@ impl PlatformWindow for WaylandWindow {
     }
 }
 
+impl gpui::PlatformTextInputSpi for WaylandWindow {
+    fn set_text_input_configuration(&mut self, _configuration: gpui::TextInputConfiguration) {}
+
+    fn text_input_state_changed(&self, _change: gpui::TextInputStateChange) {}
+}
+
 impl gpui::PlatformAccessibilitySpi for WaylandWindow {
     fn a11y_init(&self, callbacks: gpui::A11yCallbacks) {
         let activation_handler = TrivialActivationHandler {

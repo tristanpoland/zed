@@ -1944,6 +1944,12 @@ impl PlatformWindow for X11Window {
     }
 }
 
+impl gpui::PlatformTextInputSpi for X11Window {
+    fn set_text_input_configuration(&mut self, _configuration: gpui::TextInputConfiguration) {}
+
+    fn text_input_state_changed(&self, _change: gpui::TextInputStateChange) {}
+}
+
 impl gpui::PlatformAccessibilitySpi for X11Window {
     fn a11y_init(&self, callbacks: gpui::A11yCallbacks) {
         let activation_handler = TrivialActivationHandler {

@@ -2330,6 +2330,12 @@ impl PlatformWindow for MacWindow {
     }
 }
 
+impl gpui::PlatformTextInputSpi for MacWindow {
+    fn set_text_input_configuration(&mut self, _configuration: gpui::TextInputConfiguration) {}
+
+    fn text_input_state_changed(&self, _change: gpui::TextInputStateChange) {}
+}
+
 impl gpui::PlatformAccessibilitySpi for MacWindow {
     fn a11y_init(&self, callbacks: gpui::A11yCallbacks) {
         let mut lock = self.0.lock();

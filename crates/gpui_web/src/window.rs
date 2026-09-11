@@ -11,10 +11,10 @@ use std::{cell::Cell, cell::RefCell, rc::Rc};
 use gpui::{
     AnyWindowHandle, Bounds, Capslock, Decorations, DevicePixels, DispatchEventResult, GpuSpecs,
     Modifiers, MouseButton, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PromptButton, PromptLevel, RequestFrameOptions,
-    ResizeEdge, Scene, Size, TextInputConfiguration, TextInputStateChange, WindowAppearance,
-    WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowControls, WindowDecorations,
-    WindowInsets, WindowParams, px,
+    PlatformInputHandler, PlatformTextInputSpi, PlatformWindow, Point, PromptButton, PromptLevel,
+    RequestFrameOptions, ResizeEdge, Scene, Size, TextInputConfiguration, TextInputStateChange,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowControls,
+    WindowDecorations, WindowInsets, WindowParams, px,
 };
 use gpui_wgpu::{WgpuContext, WgpuRenderer, WgpuSurfaceConfig, wgpu};
 use wasm_bindgen::prelude::*;
@@ -746,10 +746,6 @@ impl PlatformWindow for WebWindow {
         self.inner.state.borrow_mut().input_handler.take()
     }
 
-    fn set_text_input_configuration(&mut self, configuration: TextInputConfiguration) {
-        self.inner.ime_mirror.apply_configuration(&configuration);
-    }
-
     fn show_soft_keyboard(&self) {
         self.inner.show_virtual_keyboard();
     }
@@ -803,34 +799,6 @@ impl PlatformWindow for WebWindow {
 
     fn insets(&self) -> WindowInsets {
         self.inner.viewport.borrow().insets.clone()
-    }
-
-    fn text_input_state_changed(&self, change: TextInputStateChange) {
-        // React to editability transitions, not each frame: manually dismissing
-        // the keyboard must remain effective until another editing gesture.
-        // On desktop, the DOM input remains the keyboard event receiver even
-        // when GPUI focuses a read-only surface. Blurring it would also disable
-        // hardware shortcuts, unlike a native window.
-        if self.inner.touch_input {
-            match change {
-                TextInputStateChange::FocusGained => self.inner.show_virtual_keyboard(),
-                TextInputStateChange::FocusLost => self.hide_soft_keyboard(),
-                TextInputStateChange::SelectionChanged | TextInputStateChange::ContentChanged => {}
-            }
-            return;
-        }
-        match change {
-            TextInputStateChange::FocusGained => {
-                self.inner.ime_mirror.set_read_only(false);
-                if !self.inner.ime_mirror.is_focused() {
-                    self.inner.focus_ime_mirror();
-                }
-            }
-            TextInputStateChange::FocusLost => {
-                self.inner.ime_mirror.set_read_only(true);
-            }
-            TextInputStateChange::SelectionChanged | TextInputStateChange::ContentChanged => {}
-        }
     }
 
     fn prompt(
@@ -1008,6 +976,40 @@ impl PlatformWindow for WebWindow {
     }
 
     fn set_client_inset(&self, _inset: Pixels) {}
+}
+
+impl PlatformTextInputSpi for WebWindow {
+    fn set_text_input_configuration(&mut self, configuration: TextInputConfiguration) {
+        self.inner.ime_mirror.apply_configuration(&configuration);
+    }
+
+    fn text_input_state_changed(&self, change: TextInputStateChange) {
+        // React to editability transitions, not each frame: manually dismissing
+        // the keyboard must remain effective until another editing gesture.
+        // On desktop, the DOM input remains the keyboard event receiver even
+        // when GPUI focuses a read-only surface. Blurring it would also disable
+        // hardware shortcuts, unlike a native window.
+        if self.inner.touch_input {
+            match change {
+                TextInputStateChange::FocusGained => self.inner.show_virtual_keyboard(),
+                TextInputStateChange::FocusLost => self.hide_soft_keyboard(),
+                TextInputStateChange::SelectionChanged | TextInputStateChange::ContentChanged => {}
+            }
+            return;
+        }
+        match change {
+            TextInputStateChange::FocusGained => {
+                self.inner.ime_mirror.set_read_only(false);
+                if !self.inner.ime_mirror.is_focused() {
+                    self.inner.focus_ime_mirror();
+                }
+            }
+            TextInputStateChange::FocusLost => {
+                self.inner.ime_mirror.set_read_only(true);
+            }
+            TextInputStateChange::SelectionChanged | TextInputStateChange::ContentChanged => {}
+        }
+    }
 }
 
 impl gpui::PlatformAccessibilitySpi for WebWindow {

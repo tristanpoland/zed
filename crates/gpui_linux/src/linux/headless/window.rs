@@ -230,6 +230,12 @@ impl PlatformWindow for HeadlessWindow {
     }
 }
 
+impl gpui::PlatformTextInputSpi for HeadlessWindow {
+    fn set_text_input_configuration(&mut self, _configuration: gpui::TextInputConfiguration) {}
+
+    fn text_input_state_changed(&self, _change: gpui::TextInputStateChange) {}
+}
+
 impl gpui::PlatformAccessibilitySpi for HeadlessWindow {
     fn a11y_init(&self, _callbacks: gpui::A11yCallbacks) {}
 

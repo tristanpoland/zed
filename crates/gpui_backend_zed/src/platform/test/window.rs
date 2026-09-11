@@ -356,14 +356,6 @@ impl PlatformWindow for TestWindow {
         self.0.lock().input_handler.take()
     }
 
-    fn set_text_input_configuration(&mut self, configuration: TextInputConfiguration) {
-        self.0.lock().text_input_configurations.push(configuration);
-    }
-
-    fn text_input_state_changed(&self, change: TextInputStateChange) {
-        self.0.lock().text_input_state_changes.push(change);
-    }
-
     fn prompt(
         &self,
         _level: crate::PromptLevel,
@@ -561,6 +553,16 @@ impl PlatformWindow for TestWindow {
 
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         None
+    }
+}
+
+impl crate::PlatformTextInputSpi for TestWindow {
+    fn set_text_input_configuration(&mut self, configuration: TextInputConfiguration) {
+        self.0.lock().text_input_configurations.push(configuration);
+    }
+
+    fn text_input_state_changed(&self, change: TextInputStateChange) {
+        self.0.lock().text_input_state_changes.push(change);
     }
 }
 
