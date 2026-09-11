@@ -1821,6 +1821,7 @@ pub mod notifications;
 pub mod paths;
 pub mod task;
 pub mod urls;
+pub mod view;
 pub mod window;
 
 pub use accessibility::{
@@ -1846,4 +1847,5 @@ pub use paths::*;
 pub use platform::*;
 pub use task::*;
 pub use urls::PlatformUrlSpi;
+pub use view::{AnyView, AnyWeakView, ViewBackend, ViewElement};
 pub use window::*;

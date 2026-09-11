@@ -1,94 +1,93 @@
 use crate::{
-    AnyElement, AnyEntity, AnyWeakEntity, App, Bounds, ContentMask, Context, Element, ElementId,
-    Entity, EntityId, GlobalElementId, InspectorElementId, IntoElement, LayoutId, PaintIndex,
-    Pixels, PrepaintStateIndex, Render, RenderOnce, Style, StyleRefinement, TextStyle, WeakEntity,
+    AnyElement, App, Bounds, ContentMask, Context, Element, ElementId, Entity, EntityId,
+    GlobalElementId, InspectorElementId, IntoElement, LayoutId, PaintIndex, Pixels,
+    PrepaintStateIndex, Render, RenderOnce, Style, StyleRefinement, TextStyle, WeakEntity,
 };
 use crate::{Empty, Window};
 use anyhow::Result;
 use collections::FxHashSet;
+use gpui_types::{
+    AnyView as SharedAnyView, AnyWeakView as SharedAnyWeakView, ViewBackend as SharedViewBackend,
+    ViewElement as SharedViewElement,
+};
 use refineable::Refineable;
 use std::mem;
-use std::{any::TypeId, fmt, ops::Range};
+use std::{any::TypeId, ops::Range};
+
+#[doc(hidden)]
+pub struct GpuiViewBackend;
+
+impl SharedViewBackend for GpuiViewBackend {
+    type AnyEntity = crate::AnyEntity;
+    type AnyWeakEntity = crate::AnyWeakEntity;
+    type Entity<T> = crate::Entity<T>;
+    type WeakEntity<T> = crate::WeakEntity<T>;
+    type Window = Window;
+    type App = App;
+    type Element = AnyElement;
+    type CacheStyle = StyleRefinement;
+
+    fn into_any<T: 'static>(entity: Self::Entity<T>) -> Self::AnyEntity {
+        entity.into_any()
+    }
+
+    fn into_any_weak<T: 'static>(entity: Self::WeakEntity<T>) -> Self::AnyWeakEntity {
+        entity.into()
+    }
+
+    fn entity_id(entity: &Self::AnyEntity) -> EntityId {
+        entity.entity_id()
+    }
+
+    fn weak_entity_id(entity: &Self::AnyWeakEntity) -> EntityId {
+        entity.entity_id()
+    }
+
+    fn entity_type(entity: &Self::AnyEntity) -> TypeId {
+        entity.entity_type()
+    }
+
+    fn downgrade(entity: &Self::AnyEntity) -> Self::AnyWeakEntity {
+        entity.downgrade()
+    }
+
+    fn downcast<T: 'static>(entity: Self::AnyEntity) -> Result<Self::Entity<T>, Self::AnyEntity> {
+        entity.downcast()
+    }
+
+    fn upgrade(entity: &Self::AnyWeakEntity) -> Option<Self::AnyEntity> {
+        entity.upgrade()
+    }
+}
+
+/// A dynamically typed view handle for the GPUI backend.
+pub type AnyView = SharedAnyView<GpuiViewBackend>;
+/// A weak dynamically typed view handle for the GPUI backend.
+pub type AnyWeakView = SharedAnyWeakView<GpuiViewBackend>;
+/// The backend-rendered element wrapper for a GPUI view.
+pub type ViewElement<V> = SharedViewElement<GpuiViewBackend, V>;
 
 /// A dynamically-typed view handle that can be downcast to a specific `Entity<V>`.
 ///
 /// This is the type-erased counterpart to [`ViewElement`]: it holds an entity plus
 /// a function pointer to its render, and is itself a [`View`], so embedding it as an
 /// element goes through the same [`ViewElement`] machinery as any other view.
-#[derive(Clone, Debug)]
-pub struct AnyView {
-    entity: AnyEntity,
-    render: fn(&AnyView, &mut Window, &mut App) -> AnyElement,
-}
-
 impl<V: Render> From<Entity<V>> for AnyView {
     fn from(value: Entity<V>) -> Self {
-        AnyView {
-            entity: value.into_any(),
-            render: any_view::render::<V>,
-        }
+        SharedAnyView::from_parts(GpuiViewBackend::into_any(value), any_view::render::<V>)
     }
 }
-
-impl AnyView {
-    /// Embed this view as a cached [`ViewElement`] laid out at `style`.
-    ///
-    /// The rendered subtree is recycled from the previous frame unless
-    /// [Context::notify] was called on the backing entity since it was rendered
-    /// (or [Window::refresh] is called, which ignores caching).
-    pub fn cached(self, style: StyleRefinement) -> ViewElement<AnyView> {
-        ViewElement::new(self).cached(style)
-    }
-
-    /// Convert this to a weak handle.
-    pub fn downgrade(&self) -> AnyWeakView {
-        AnyWeakView {
-            entity: self.entity.downgrade(),
-            render: self.render,
-        }
-    }
-
-    /// Convert this to a [Entity] of a specific type.
-    /// If this handle does not contain a view of the specified type, returns itself in an `Err` variant.
-    pub fn downcast<T: 'static>(self) -> Result<Entity<T>, Self> {
-        match self.entity.downcast() {
-            Ok(entity) => Ok(entity),
-            Err(entity) => Err(Self {
-                entity,
-                render: self.render,
-            }),
-        }
-    }
-
-    /// Gets the [TypeId] of the underlying view.
-    pub fn entity_type(&self) -> TypeId {
-        self.entity.entity_type
-    }
-
-    /// The [`EntityId`] of this view.
-    pub fn entity_id(&self) -> EntityId {
-        self.entity.entity_id()
-    }
-}
-
-impl PartialEq for AnyView {
-    fn eq(&self, other: &Self) -> bool {
-        self.entity == other.entity
-    }
-}
-
-impl Eq for AnyView {}
 
 /// `AnyView` is the type-erased [`View`]: its `render` is a function pointer rather
 /// than a concrete type, but it participates in the reactive graph exactly like any
 /// other view via [`ViewElement`].
 impl View for AnyView {
     fn entity_id(&self) -> Option<EntityId> {
-        Some(self.entity.entity_id())
+        Some(self.entity_id())
     }
 
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        (self.render)(&self, window, cx)
+        self.render_with(window, cx)
     }
 }
 
@@ -96,7 +95,8 @@ impl<V: 'static + Render> IntoElement for Entity<V> {
     type Element = ViewElement<Entity<V>>;
 
     fn into_element(self) -> Self::Element {
-        ViewElement::new(self)
+        let entity_id = self.entity_id();
+        ViewElement::new_with_entity(self, Some(entity_id))
     }
 }
 
@@ -104,47 +104,14 @@ impl IntoElement for AnyView {
     type Element = ViewElement<AnyView>;
 
     fn into_element(self) -> Self::Element {
-        ViewElement::new(self)
-    }
-}
-
-/// A weak, dynamically-typed view handle.
-pub struct AnyWeakView {
-    entity: AnyWeakEntity,
-    render: fn(&AnyView, &mut Window, &mut App) -> AnyElement,
-}
-
-impl AnyWeakView {
-    /// Upgrade to a strong `AnyView` handle, if the view is still alive.
-    pub fn upgrade(&self) -> Option<AnyView> {
-        let entity = self.entity.upgrade()?;
-        Some(AnyView {
-            entity,
-            render: self.render,
-        })
+        let entity_id = self.entity_id();
+        ViewElement::new_with_entity(self, Some(entity_id))
     }
 }
 
 impl<V: 'static + Render> From<WeakEntity<V>> for AnyWeakView {
     fn from(view: WeakEntity<V>) -> Self {
-        AnyWeakView {
-            entity: view.into(),
-            render: any_view::render::<V>,
-        }
-    }
-}
-
-impl PartialEq for AnyWeakView {
-    fn eq(&self, other: &Self) -> bool {
-        self.entity == other.entity
-    }
-}
-
-impl std::fmt::Debug for AnyWeakView {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AnyWeakView")
-            .field("entity_id", &self.entity.entity_id)
-            .finish_non_exhaustive()
+        SharedAnyWeakView::from_parts(GpuiViewBackend::into_any_weak(view), any_view::render::<V>)
     }
 }
 
@@ -230,47 +197,8 @@ impl<T: Render> Entity<T> {
     /// uncached case.
     #[track_caller]
     pub fn cached(self, style: StyleRefinement) -> ViewElement<Entity<T>> {
-        ViewElement::new(self).cached(style)
-    }
-}
-
-/// The element type for [`View`] implementations. Wraps a `View` and hooks it
-/// into layout, prepaint, and paint. Constructed via [`ViewElement::new`].
-#[doc(hidden)]
-pub struct ViewElement<V: View> {
-    view: Option<V>,
-    entity_id: Option<EntityId>,
-    cached_style: Option<StyleRefinement>,
-    #[cfg(debug_assertions)]
-    source: &'static core::panic::Location<'static>,
-}
-
-impl<V: View> ViewElement<V> {
-    /// Wrap a [`View`] as an element.
-    #[track_caller]
-    pub fn new(view: V) -> Self {
-        let entity_id = view.entity_id();
-        ViewElement {
-            entity_id,
-            cached_style: None,
-            view: Some(view),
-            #[cfg(debug_assertions)]
-            source: core::panic::Location::caller(),
-        }
-    }
-
-    /// Enable caching of this view's rendered subtree, laid out at `style`.
-    /// The composer supplies the layout style because caching skips rendering
-    /// the contents to measure them.
-    ///
-    /// Crate-private on purpose: caching is only sound for entity-backed views,
-    /// where [`Context::notify`] is the contract that busts the cache. A stateless
-    /// view has no such contract, so a frozen subtree could never be invalidated.
-    /// Reach this through [`Entity::cached`] or [`AnyView::cached`], which are
-    /// entity-backed by construction.
-    pub(crate) fn cached(mut self, style: StyleRefinement) -> Self {
-        self.cached_style = Some(style);
-        self
+        let entity_id = self.entity_id();
+        ViewElement::new_with_entity(self, Some(entity_id)).cached(style)
     }
 }
 
@@ -300,15 +228,13 @@ impl<V: View> Element for ViewElement<V> {
     type PrepaintState = Option<AnyElement>;
 
     fn id(&self) -> Option<ElementId> {
-        self.entity_id.map(ElementId::View)
+        self.view_entity_id()
+            .or_else(|| self.view().and_then(View::entity_id))
+            .map(ElementId::View)
     }
 
     fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
-        #[cfg(debug_assertions)]
-        return Some(self.source);
-
-        #[cfg(not(debug_assertions))]
-        return None;
+        SharedViewElement::source_location(self)
     }
 
     fn request_layout(
@@ -318,11 +244,15 @@ impl<V: View> Element for ViewElement<V> {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        if let Some(entity_id) = self.entity_id {
+        if self.view_entity_id().is_none() {
+            let entity_id = self.view().and_then(View::entity_id);
+            self.set_view_entity_id(entity_id);
+        }
+        if let Some(entity_id) = self.view_entity_id() {
             // Stateful path: create a reactive boundary.
             window.with_rendered_view(entity_id, |window| {
                 let caching_disabled = window.is_inspector_picking(cx);
-                match self.cached_style.as_ref() {
+                match self.cached_style() {
                     Some(style) if !caching_disabled => {
                         let mut root_style = Style::default();
                         root_style.refine(style);
@@ -331,8 +261,7 @@ impl<V: View> Element for ViewElement<V> {
                     }
                     _ => {
                         let mut element = self
-                            .view
-                            .take()
+                            .take_view()
                             .unwrap()
                             .render(window, cx)
                             .into_any_element();
@@ -347,8 +276,7 @@ impl<V: View> Element for ViewElement<V> {
                 ElementId::Name(std::any::type_name::<V>().into()),
                 |window| {
                     let mut element = self
-                        .view
-                        .take()
+                        .take_view()
                         .unwrap()
                         .render(window, cx)
                         .into_any_element();
@@ -368,7 +296,7 @@ impl<V: View> Element for ViewElement<V> {
         window: &mut Window,
         cx: &mut App,
     ) -> Option<AnyElement> {
-        if let Some(entity_id) = self.entity_id {
+        if let Some(entity_id) = self.view_entity_id() {
             // Stateful path.
             window.set_view_id(entity_id);
             window.with_rendered_view(entity_id, |window| {
@@ -404,8 +332,7 @@ impl<V: View> Element for ViewElement<V> {
                         let prepaint_start = window.prepaint_index();
                         let (mut element, accessed_entities) = cx.detect_accessed_entities(|cx| {
                             let mut element = self
-                                .view
-                                .take()
+                                .take_view()
                                 .unwrap()
                                 .render(window, cx)
                                 .into_any_element();
@@ -455,16 +382,9 @@ impl<V: View> Element for ViewElement<V> {
         window: &mut Window,
         cx: &mut App,
     ) {
-        if let Some(entity_id) = self.entity_id {
+        if let Some(entity_id) = self.view_entity_id() {
             // Stateful path.
-            paint_view(
-                entity_id,
-                self.cached_style.is_some(),
-                global_id,
-                element,
-                window,
-                cx,
-            );
+            paint_view(entity_id, self.is_cached(), global_id, element, window, cx);
         } else {
             // Stateless path: just paint the element.
             paint_component(std::any::type_name::<V>(), element, window, cx);
