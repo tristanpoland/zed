@@ -85,13 +85,16 @@ pub mod types {
     pub use gpui_types::{
         AnyEntity, AnyWeakEntity, App, AppContextObserve, AppContextRead, AppContextRuntime,
         AppContextSpawn, AppContextSpi, AppContextUpdate, AppContextWindow, AppLifecyclePhase,
-        Context, ContextListener, ContextObserve, ContextSpawn, ContextSpi, CursorStyle, Entity,
-        EntityHandle, EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi,
+        AsKeystroke, Autocapitalize, Context, ContextListener, ContextObserve, ContextSpawn,
+        ContextSpi, CursorStyle, Entity, EntityHandle, EntityHandleRuntime, EntityId,
+        EntityReservation, EntityStorageSpi, InvalidKeystrokeError, KeybindingKeystroke, Keystroke,
         PathPromptOptions, PlatformApplicationSpi, PlatformCredentialsSpi, PlatformCursorSpi,
-        PlatformPathSpi, PlatformSystemNotificationSpi, PlatformUrlSpi, StrongEntityHandle,
+        PlatformKeyboardLayoutSpi, PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi,
+        PlatformSystemNotificationSpi, PlatformTextInputSpi, PlatformUrlSpi, StrongEntityHandle,
         SubscriptionHandle, SystemNotification, SystemNotificationAction,
-        SystemNotificationResponse, TaskHandle, VisualContextSpi, WeakEntity, WeakEntityHandle,
-        clipboard, color, geometry, input, platform,
+        SystemNotificationResponse, TaskHandle, TextInputAction, TextInputConfiguration,
+        TextInputStateChange, UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle,
+        clipboard, color, geometry, input, input_method, keyboard, keystroke, platform,
     };
 }
 

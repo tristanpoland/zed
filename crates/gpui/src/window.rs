@@ -13,9 +13,9 @@ use crate::{
     Hsla, InputHandler, IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke,
     KeystrokeEvent, LayoutId, LineLayoutIndex, Modifiers, ModifiersChangedEvent, MonochromeSprite,
     MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAtlas,
-    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PolychromeSprite,
-    Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams, RenderImage,
-    RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
+    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformTextInputSpi, PlatformWindow,
+    Point, PolychromeSprite, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
+    RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
     SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow, SharedString, Size,
     StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
     SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task, TextInputConfiguration,
@@ -3161,12 +3161,14 @@ impl Window {
         self.apply_text_input_configuration(cx);
         if focused_text_input_active != self.focused_text_input_active {
             self.focused_text_input_active = focused_text_input_active;
-            self.platform_window
-                .text_input_state_changed(if focused_text_input_active {
+            PlatformTextInputSpi::text_input_state_changed(
+                self.platform_window.as_ref(),
+                if focused_text_input_active {
                     TextInputStateChange::FocusGained
                 } else {
                     TextInputStateChange::FocusLost
-                });
+                },
+            );
         }
 
         self.layout_engine.as_mut().unwrap().clear();
@@ -5087,8 +5089,10 @@ impl Window {
             None => TextInputConfiguration::default(),
         };
         if self.last_text_input_configuration.as_ref() != Some(&configuration) {
-            self.platform_window
-                .set_text_input_configuration(configuration.clone());
+            PlatformTextInputSpi::set_text_input_configuration(
+                self.platform_window.as_mut(),
+                configuration.clone(),
+            );
             self.last_text_input_configuration = Some(configuration);
         }
     }

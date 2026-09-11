@@ -68,12 +68,12 @@ use crate::{
     ClipboardReadError, CursorStyle, DispatchPhase, DisplayId, EventEmitter, ExternalDragPayload,
     FocusHandle, FocusMap, ForegroundExecutor, Global, KeyBinding, KeyContext, Keymap, Keystroke,
     LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform, PlatformDisplay,
-    PlatformKeyboardLayout, PlatformKeyboardMapper, Point, Priority, PromptBuilder, PromptButton,
-    PromptHandle, PromptLevel, Render, RenderImage, RenderablePromptHandle, Reservation,
-    ScreenCaptureSource, SharedString, SubscriberSet, Subscription, SvgRenderer,
-    SystemNotification, SystemNotificationResponse, Task, TextRenderingMode, TextSystem,
-    ThermalState, Window, WindowAppearance, WindowButtonLayout, WindowHandle, WindowId,
-    WindowInvalidator,
+    PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformKeyboardSpi, Point, Priority,
+    PromptBuilder, PromptButton, PromptHandle, PromptLevel, Render, RenderImage,
+    RenderablePromptHandle, Reservation, ScreenCaptureSource, SharedString, SubscriberSet,
+    Subscription, SvgRenderer, SystemNotification, SystemNotificationResponse, Task,
+    TextRenderingMode, TextSystem, ThermalState, Window, WindowAppearance, WindowButtonLayout,
+    WindowHandle, WindowId, WindowInvalidator,
     colors::{Colors, GlobalColors},
     hash, init_app_menus,
 };
@@ -824,8 +824,8 @@ impl App {
 
         let text_system = Arc::new(TextSystem::new(platform.text_system()));
         let entities = EntityMap::new();
-        let keyboard_layout = platform.keyboard_layout();
-        let keyboard_mapper = platform.keyboard_mapper();
+        let keyboard_layout = PlatformKeyboardSpi::keyboard_layout(platform.as_ref());
+        let keyboard_mapper = PlatformKeyboardSpi::keyboard_mapper(platform.as_ref());
 
         #[cfg(any(test, feature = "leak-detection"))]
         let _ref_counts = entities.ref_counts_drop_handle();
@@ -908,19 +908,24 @@ impl App {
         init_app_menus(platform.as_ref(), &app.borrow());
         SystemWindowTabController::init(&mut app.borrow_mut());
 
-        platform.on_keyboard_layout_change(Box::new({
-            let app = Rc::downgrade(&app);
-            move || {
-                if let Some(app) = app.upgrade() {
-                    let cx = &mut app.borrow_mut();
-                    cx.keyboard_layout = cx.platform.keyboard_layout();
-                    cx.keyboard_mapper = cx.platform.keyboard_mapper();
-                    cx.keyboard_layout_observers
-                        .clone()
-                        .retain(&(), move |callback| (callback)(cx));
+        PlatformKeyboardSpi::on_keyboard_layout_change(
+            platform.as_ref(),
+            Box::new({
+                let app = Rc::downgrade(&app);
+                move || {
+                    if let Some(app) = app.upgrade() {
+                        let cx = &mut app.borrow_mut();
+                        cx.keyboard_layout =
+                            PlatformKeyboardSpi::keyboard_layout(cx.platform.as_ref());
+                        cx.keyboard_mapper =
+                            PlatformKeyboardSpi::keyboard_mapper(cx.platform.as_ref());
+                        cx.keyboard_layout_observers
+                            .clone()
+                            .retain(&(), move |callback| (callback)(cx));
+                    }
                 }
-            }
-        }));
+            }),
+        );
 
         platform.on_thermal_state_change(Box::new({
             let app = Rc::downgrade(&app);

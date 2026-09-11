@@ -377,9 +377,191 @@ pub mod input {
     }
 
     impl Modifiers {
-        /// Whether any modifier is pressed.
-        pub const fn modified(self) -> bool {
+        /// Returns whether any modifier key is pressed.
+        pub fn modified(&self) -> bool {
             self.control || self.alt || self.shift || self.platform || self.function
+        }
+
+        /// Whether the semantically 'secondary' modifier key is pressed.
+        pub fn secondary(&self) -> bool {
+            #[cfg(target_os = "macos")]
+            {
+                self.platform
+            }
+
+            #[cfg(not(target_os = "macos"))]
+            {
+                self.control
+            }
+        }
+
+        /// Returns how many modifier keys are pressed.
+        pub fn number_of_modifiers(&self) -> u8 {
+            self.control as u8
+                + self.alt as u8
+                + self.shift as u8
+                + self.platform as u8
+                + self.function as u8
+        }
+
+        /// Returns [`Modifiers`] with no modifiers.
+        pub fn none() -> Self {
+            Default::default()
+        }
+
+        /// Returns [`Modifiers`] with just the command key.
+        pub fn command() -> Self {
+            Self {
+                platform: true,
+                ..Default::default()
+            }
+        }
+
+        /// Returns [`Modifiers`] with just the secondary key pressed.
+        pub fn secondary_key() -> Self {
+            #[cfg(target_os = "macos")]
+            {
+                Self {
+                    platform: true,
+                    ..Default::default()
+                }
+            }
+
+            #[cfg(not(target_os = "macos"))]
+            {
+                Self {
+                    control: true,
+                    ..Default::default()
+                }
+            }
+        }
+
+        /// Returns [`Modifiers`] with just the windows key.
+        pub fn windows() -> Self {
+            Self {
+                platform: true,
+                ..Default::default()
+            }
+        }
+
+        /// Returns [`Modifiers`] with just the super key.
+        pub fn super_key() -> Self {
+            Self {
+                platform: true,
+                ..Default::default()
+            }
+        }
+
+        /// Returns [`Modifiers`] with just control.
+        pub fn control() -> Self {
+            Self {
+                control: true,
+                ..Default::default()
+            }
+        }
+
+        /// Returns [`Modifiers`] with just alt.
+        pub fn alt() -> Self {
+            Self {
+                alt: true,
+                ..Default::default()
+            }
+        }
+
+        /// Returns [`Modifiers`] with just shift.
+        pub fn shift() -> Self {
+            Self {
+                shift: true,
+                ..Default::default()
+            }
+        }
+
+        /// Returns [`Modifiers`] with just function.
+        pub fn function() -> Self {
+            Self {
+                function: true,
+                ..Default::default()
+            }
+        }
+
+        /// Returns [`Modifiers`] with command + shift.
+        pub fn command_shift() -> Self {
+            Self {
+                shift: true,
+                platform: true,
+                ..Default::default()
+            }
+        }
+
+        /// Returns [`Modifiers`] with control + shift.
+        pub fn control_shift() -> Self {
+            Self {
+                shift: true,
+                control: true,
+                ..Default::default()
+            }
+        }
+
+        /// Checks if this [`Modifiers`] is a subset of another [`Modifiers`].
+        pub fn is_subset_of(&self, other: &Self) -> bool {
+            (*other & *self) == *self
+        }
+    }
+
+    impl std::ops::BitOr for Modifiers {
+        type Output = Self;
+
+        fn bitor(mut self, other: Self) -> Self::Output {
+            self |= other;
+            self
+        }
+    }
+
+    impl std::ops::BitOrAssign for Modifiers {
+        fn bitor_assign(&mut self, other: Self) {
+            self.control |= other.control;
+            self.alt |= other.alt;
+            self.shift |= other.shift;
+            self.platform |= other.platform;
+            self.function |= other.function;
+        }
+    }
+
+    impl std::ops::BitXor for Modifiers {
+        type Output = Self;
+
+        fn bitxor(mut self, rhs: Self) -> Self::Output {
+            self ^= rhs;
+            self
+        }
+    }
+
+    impl std::ops::BitXorAssign for Modifiers {
+        fn bitxor_assign(&mut self, other: Self) {
+            self.control ^= other.control;
+            self.alt ^= other.alt;
+            self.shift ^= other.shift;
+            self.platform ^= other.platform;
+            self.function ^= other.function;
+        }
+    }
+
+    impl std::ops::BitAnd for Modifiers {
+        type Output = Self;
+
+        fn bitand(mut self, rhs: Self) -> Self::Output {
+            self &= rhs;
+            self
+        }
+    }
+
+    impl std::ops::BitAndAssign for Modifiers {
+        fn bitand_assign(&mut self, other: Self) {
+            self.control &= other.control;
+            self.alt &= other.alt;
+            self.shift &= other.shift;
+            self.platform &= other.platform;
+            self.function &= other.function;
         }
     }
 
@@ -388,7 +570,8 @@ pub mod input {
         Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema,
     )]
     pub struct Capslock {
-        /// Whether caps lock is enabled.
+        /// The capslock key is on.
+        #[serde(default)]
         pub on: bool,
     }
 
@@ -551,6 +734,9 @@ pub mod clipboard;
 pub mod context;
 pub mod credentials;
 pub mod entity;
+pub mod input_method;
+pub mod keyboard;
+pub mod keystroke;
 pub mod notifications;
 pub mod paths;
 pub mod urls;
@@ -563,6 +749,9 @@ pub use credentials::*;
 pub use entity::*;
 pub use geometry::*;
 pub use input::*;
+pub use input_method::*;
+pub use keyboard::*;
+pub use keystroke::*;
 pub use notifications::*;
 pub use paths::*;
 pub use platform::*;

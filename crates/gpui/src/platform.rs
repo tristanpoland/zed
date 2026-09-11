@@ -77,6 +77,11 @@ use gpui_types::clipboard::{
 pub use gpui_types::clipboard::{
     ClipboardReadError, ClipboardString, ImageFormat, PlatformClipboardSpi,
 };
+pub use gpui_types::input::{Capslock, Modifiers};
+pub use gpui_types::input_method::{
+    Autocapitalize, PlatformTextInputSpi, TextInputAction, TextInputConfiguration,
+    TextInputStateChange, UTF16Selection,
+};
 pub use gpui_types::paths::{PathPromptOptions, PlatformPathSpi};
 pub use gpui_types::platform::{
     AppLifecyclePhase, CursorStyle, PlatformApplicationSpi, PlatformCredentialsSpi,
@@ -84,6 +89,13 @@ pub use gpui_types::platform::{
     SystemNotificationResponse,
 };
 pub use gpui_types::urls::PlatformUrlSpi;
+pub use keyboard::{
+    DummyKeyboardMapper, PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformKeyboardSpi,
+};
+pub use keystroke::{
+    AsKeystroke, InvalidKeystrokeError, KEYSTROKE_PARSE_EXPECTED_MESSAGE, KeybindingKeystroke,
+    Keystroke,
+};
 /// A clipboard entry using GPUI's runtime image type.
 pub type ClipboardEntry = SharedClipboardEntry<Image>;
 /// A clipboard item using GPUI's runtime image type.
@@ -100,9 +112,6 @@ impl From<Image> for ClipboardItem {
         Self::from(ClipboardEntry::from(value))
     }
 }
-
-pub use keyboard::*;
-pub use keystroke::*;
 
 #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
 pub(crate) use test::*;
@@ -389,6 +398,20 @@ pub trait Platform: 'static {
     fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout>;
     fn keyboard_mapper(&self) -> Rc<dyn PlatformKeyboardMapper>;
     fn on_keyboard_layout_change(&self, callback: Box<dyn FnMut()>);
+}
+
+impl PlatformKeyboardSpi for dyn Platform {
+    fn keyboard_layout(&self) -> Box<dyn gpui_types::keyboard::PlatformKeyboardLayoutSpi> {
+        Platform::keyboard_layout(self)
+    }
+
+    fn keyboard_mapper(&self) -> Rc<dyn gpui_types::keyboard::PlatformKeyboardMapperSpi> {
+        Platform::keyboard_mapper(self)
+    }
+
+    fn on_keyboard_layout_change(&self, callback: Box<dyn FnMut()>) {
+        Platform::on_keyboard_layout_change(self, callback);
+    }
 }
 
 impl PlatformCursorSpi for dyn Platform {
@@ -963,19 +986,6 @@ impl WindowInsets {
     }
 }
 
-/// A change in the state of the focused text input.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum TextInputStateChange {
-    /// The window changed from having no active text input to having one.
-    FocusGained,
-    /// The window no longer has an active text input.
-    FocusLost,
-    /// The selection or caret moved
-    SelectionChanged,
-    /// The document content changed outside of platform-initiated edits.
-    ContentChanged,
-}
-
 #[expect(missing_docs)]
 pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn bounds(&self) -> Bounds<Pixels>;
@@ -1179,6 +1189,16 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     #[cfg(any(test, feature = "test-support"))]
     fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
         anyhow::bail!("render_to_image not implemented for this platform")
+    }
+}
+
+impl PlatformTextInputSpi for dyn PlatformWindow {
+    fn set_text_input_configuration(&mut self, configuration: TextInputConfiguration) {
+        PlatformWindow::set_text_input_configuration(self, configuration);
+    }
+
+    fn text_input_state_changed(&self, change: TextInputStateChange) {
+        PlatformWindow::text_input_state_changed(self, change);
     }
 }
 
@@ -1871,18 +1891,6 @@ impl PlatformInputHandler {
     }
 }
 
-/// A struct representing a selection in a text buffer, in UTF16 characters.
-/// This is different from a range because the head may be before the tail.
-#[derive(Debug)]
-pub struct UTF16Selection {
-    /// The range of text in the document this selection corresponds to
-    /// in UTF16 characters.
-    pub range: Range<usize>,
-    /// Whether the head of this selection is at the start (true), or end (false)
-    /// of the range
-    pub reversed: bool,
-}
-
 /// Zed's interface for handling text input from the platform's IME system
 /// This is currently a 1:1 exposure of the NSTextInputClient API:
 ///
@@ -2069,71 +2077,6 @@ pub trait InputHandler: 'static {
     ) -> TextInputConfiguration {
         TextInputConfiguration::default()
     }
-}
-
-/// Platform text-assistance preferences for the focused text region.
-///
-/// Returned by [`InputHandler::text_input_configuration`] and forwarded to the
-/// platform whenever it changes; the platform maps the fields onto its native
-/// input-session attributes (on web, DOM attributes of the hidden editable
-/// element such as `autocorrect` and `enterkeyhint`).
-///
-/// The default disables all text assistance and requests no particular action
-/// key presentation.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct TextInputConfiguration {
-    /// Whether the platform may automatically correct entered text.
-    pub autocorrect: bool,
-    /// How software keyboards automatically capitalize entered text.
-    pub autocapitalize: Autocapitalize,
-    /// Whether software keyboards may offer word suggestions and spellcheck.
-    pub suggestions: bool,
-    /// The action advertised on a software keyboard's confirm ("enter") key.
-    pub input_action: TextInputAction,
-}
-
-/// Automatic capitalization applied by software keyboards.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Autocapitalize {
-    /// No automatic capitalization.
-    #[default]
-    None,
-    /// Capitalize the first letter of each word.
-    Words,
-    /// Capitalize the first letter of each sentence.
-    Sentences,
-    /// Capitalize every letter.
-    Characters,
-}
-
-/// The action a software keyboard advertises on its confirm ("enter") key.
-///
-/// This affects only how the key is presented (icon or label); pressing it is
-/// still delivered as ordinary input.
-///
-/// The variants are the HTML `enterkeyhint` attribute's value set
-/// (<https://html.spec.whatwg.org/multipage/interaction.html#input-modalities:-the-enterkeyhint-attribute>),
-/// which also maps onto Android's `IME_ACTION_*` constants and iOS's
-/// `UIReturnKeyType`; [`TextInputAction::Unspecified`] means "emit no hint".
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum TextInputAction {
-    /// Let the platform choose its default presentation.
-    #[default]
-    Unspecified,
-    /// Inserting a line break.
-    Enter,
-    /// Committing the field's value.
-    Done,
-    /// Navigating to the typed target.
-    Go,
-    /// Moving to the next field.
-    Next,
-    /// Moving to the previous field.
-    Previous,
-    /// Executing a search.
-    Search,
-    /// Sending a message.
-    Send,
 }
 
 /// The variables that can be configured when creating a new window

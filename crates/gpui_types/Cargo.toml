@@ -15,6 +15,7 @@ workspace = true
 path = "src/gpui_types.rs"
 
 [dependencies]
+collections.workspace = true
 gpui_shared_string.workspace = true
 schemars.workspace = true
 seahash = "4.1"
