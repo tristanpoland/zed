@@ -1,12 +1,13 @@
 pub use gpui_types::{
     AppContextObserve, AppContextRead, AppContextSpawn, AppContextSpi, AppContextUpdate,
-    AppContextWindow, ContextObserve, ContextSpawn, EntityHandle, EntityStorageSpi,
-    StrongEntityHandle, SubscriptionHandle, TaskHandle, VisualContextSpi, WeakEntityHandle,
+    AppContextWindow, ContextListener, ContextObserve, ContextSpawn, EntityHandle,
+    EntityStorageSpi, StrongEntityHandle, SubscriptionHandle, TaskHandle, VisualContextSpi,
+    WeakEntityHandle,
 };
 
 use crate::{
     AnyEntity, AnyView, AnyWeakEntity, AnyWindowHandle, App, AsyncApp, AsyncWindowContext, Context,
-    Entity, EntityId, Global, Subscription, Task, WeakEntity, Window, WindowHandle,
+    Entity, EntityId, EventEmitter, Global, Subscription, Task, WeakEntity, Window, WindowHandle,
 };
 
 macro_rules! impl_app_context_window_spi {
@@ -266,8 +267,32 @@ impl AppContextUpdate for AsyncWindowContext {
 }
 
 impl AppContextObserve for App {
+    type Entity<T> = Entity<T>;
     type App = App;
     type Subscription = Subscription;
+
+    fn observe<W>(
+        &mut self,
+        entity: &Entity<W>,
+        on_notify: impl FnMut(Entity<W>, &mut App) + 'static,
+    ) -> Self::Subscription
+    where
+        W: 'static,
+    {
+        App::observe(self, entity, on_notify)
+    }
+
+    fn subscribe<T, Event>(
+        &mut self,
+        entity: &Entity<T>,
+        on_event: impl FnMut(Entity<T>, &Event, &mut App) + 'static,
+    ) -> Self::Subscription
+    where
+        T: 'static + EventEmitter<Event>,
+        Event: 'static,
+    {
+        App::subscribe(self, entity, on_event)
+    }
 
     fn observe_global<G>(&mut self, on_update: impl FnMut(&mut App) + 'static) -> Self::Subscription
     where
@@ -278,8 +303,32 @@ impl AppContextObserve for App {
 }
 
 impl AppContextObserve for AsyncApp {
+    type Entity<T> = Entity<T>;
     type App = App;
     type Subscription = Subscription;
+
+    fn observe<W>(
+        &mut self,
+        entity: &Entity<W>,
+        on_notify: impl FnMut(Entity<W>, &mut App) + 'static,
+    ) -> Self::Subscription
+    where
+        W: 'static,
+    {
+        self.update(|cx| cx.observe(entity, on_notify))
+    }
+
+    fn subscribe<T, Event>(
+        &mut self,
+        entity: &Entity<T>,
+        on_event: impl FnMut(Entity<T>, &Event, &mut App) + 'static,
+    ) -> Self::Subscription
+    where
+        T: 'static + EventEmitter<Event>,
+        Event: 'static,
+    {
+        self.update(|cx| cx.subscribe(entity, on_event))
+    }
 
     fn observe_global<G>(&mut self, on_update: impl FnMut(&mut App) + 'static) -> Self::Subscription
     where
@@ -290,8 +339,32 @@ impl AppContextObserve for AsyncApp {
 }
 
 impl AppContextObserve for AsyncWindowContext {
+    type Entity<T> = Entity<T>;
     type App = App;
     type Subscription = Subscription;
+
+    fn observe<W>(
+        &mut self,
+        entity: &Entity<W>,
+        on_notify: impl FnMut(Entity<W>, &mut App) + 'static,
+    ) -> Self::Subscription
+    where
+        W: 'static,
+    {
+        AsyncApp::update(self, |cx| cx.observe(entity, on_notify))
+    }
+
+    fn subscribe<T, Event>(
+        &mut self,
+        entity: &Entity<T>,
+        on_event: impl FnMut(Entity<T>, &Event, &mut App) + 'static,
+    ) -> Self::Subscription
+    where
+        T: 'static + EventEmitter<Event>,
+        Event: 'static,
+    {
+        AsyncApp::update(self, |cx| cx.subscribe(entity, on_event))
+    }
 
     fn observe_global<G>(&mut self, on_update: impl FnMut(&mut App) + 'static) -> Self::Subscription
     where
@@ -312,6 +385,16 @@ impl AppContextSpawn for App {
     {
         App::spawn(self, callback)
     }
+
+    fn background_spawn<R>(
+        &self,
+        future: impl std::future::Future<Output = R> + Send + 'static,
+    ) -> Self::Task<R>
+    where
+        R: Send + 'static,
+    {
+        <App as crate::AppContext>::background_spawn(self, future)
+    }
 }
 
 impl AppContextSpawn for AsyncApp {
@@ -325,6 +408,16 @@ impl AppContextSpawn for AsyncApp {
     {
         AsyncApp::spawn(self, callback)
     }
+
+    fn background_spawn<R>(
+        &self,
+        future: impl std::future::Future<Output = R> + Send + 'static,
+    ) -> Self::Task<R>
+    where
+        R: Send + 'static,
+    {
+        <AsyncApp as crate::AppContext>::background_spawn(self, future)
+    }
 }
 
 impl AppContextSpawn for AsyncWindowContext {
@@ -337,6 +430,16 @@ impl AppContextSpawn for AsyncWindowContext {
         R: 'static,
     {
         AsyncWindowContext::spawn(self, callback)
+    }
+
+    fn background_spawn<R>(
+        &self,
+        future: impl std::future::Future<Output = R> + Send + 'static,
+    ) -> Self::Task<R>
+    where
+        R: Send + 'static,
+    {
+        <AsyncWindowContext as crate::AppContext>::background_spawn(self, future)
     }
 }
 
@@ -358,12 +461,59 @@ impl<T: 'static> ContextObserve<T> for Context<'_, T> {
         })
     }
 
+    fn subscribe<W, Event>(
+        &mut self,
+        entity: &Entity<W>,
+        on_event: impl FnMut(&mut T, Entity<W>, &Event) + 'static,
+    ) -> Self::Subscription
+    where
+        W: 'static + EventEmitter<Event>,
+        Event: 'static,
+    {
+        let mut on_event = on_event;
+        Context::subscribe(self, entity, move |state, entity, event, _context| {
+            on_event(state, entity, event)
+        })
+    }
+
+    fn subscribe_self<Event>(
+        &mut self,
+        on_event: impl FnMut(&mut T, &Event) + 'static,
+    ) -> Self::Subscription
+    where
+        T: 'static + EventEmitter<Event>,
+        Event: 'static,
+    {
+        let mut on_event = on_event;
+        Context::subscribe_self(self, move |state, event, _context| on_event(state, event))
+    }
+
     fn observe_global<G>(&mut self, on_update: impl FnMut(&mut T) + 'static) -> Self::Subscription
     where
         G: 'static,
     {
         let mut on_update = on_update;
         Context::observe_global::<G>(self, move |state, _context| on_update(state))
+    }
+}
+
+impl<T: 'static> ContextListener<T> for Context<'_, T> {
+    type Window = Window;
+    type App = App;
+    type Context<'a> = Context<'a, T>;
+
+    fn listener<E: ?Sized>(
+        &self,
+        callback: impl for<'a> Fn(&mut T, &E, &mut Window, &mut Context<'a, T>) + 'static,
+    ) -> impl Fn(&E, &mut Window, &mut App) + 'static {
+        Context::listener(self, callback)
+    }
+
+    fn processor<E, R>(
+        &self,
+        callback: impl for<'a> Fn(&mut T, E, &mut Window, &mut Context<'a, T>) -> R + 'static,
+    ) -> impl Fn(E, &mut Window, &mut App) -> R + 'static {
+        Context::processor(self, callback)
     }
 }
 

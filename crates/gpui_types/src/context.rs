@@ -1,8 +1,9 @@
 use super::{
-    EntityHandle, EntityId, Global, SubscriptionHandle, TaskHandle,
+    EntityHandle, EntityId, EventEmitter, Global, SubscriptionHandle, TaskHandle,
     entity::{Entity, EntityHandleRuntime, WeakEntity},
 };
 use std::{
+    future::Future,
     ops::{Deref, DerefMut},
     rc::Rc,
 };
@@ -156,10 +157,31 @@ pub trait VisualContextSpi: AppContextWindow {
 
 /// The global observation operations supplied by an application context.
 pub trait AppContextObserve {
+    /// The entity handle family used by this application context.
+    type Entity<T>;
     /// The application context passed to observation callbacks.
     type App;
     /// The subscription handle returned by this context.
     type Subscription: SubscriptionHandle;
+
+    /// Observes notifications from an entity.
+    fn observe<W>(
+        &mut self,
+        entity: &Self::Entity<W>,
+        on_notify: impl FnMut(Self::Entity<W>, &mut Self::App) + 'static,
+    ) -> Self::Subscription
+    where
+        W: 'static;
+
+    /// Subscribes to events emitted by an entity.
+    fn subscribe<T, Event>(
+        &mut self,
+        entity: &Self::Entity<T>,
+        on_event: impl FnMut(Self::Entity<T>, &Event, &mut Self::App) + 'static,
+    ) -> Self::Subscription
+    where
+        T: 'static + EventEmitter<Event>,
+        Event: 'static;
 
     /// Observes updates to a global through the application context.
     fn observe_global<G>(
@@ -187,11 +209,53 @@ pub trait ContextObserve<T> {
         T: 'static,
         W: 'static;
 
+    /// Subscribes to events emitted by another entity.
+    fn subscribe<W, Event>(
+        &mut self,
+        entity: &Self::Entity<W>,
+        on_event: impl FnMut(&mut T, Self::Entity<W>, &Event) + 'static,
+    ) -> Self::Subscription
+    where
+        T: 'static,
+        W: 'static + EventEmitter<Event>,
+        Event: 'static;
+
+    /// Subscribes to events emitted by this context's entity.
+    fn subscribe_self<Event>(
+        &mut self,
+        on_event: impl FnMut(&mut T, &Event) + 'static,
+    ) -> Self::Subscription
+    where
+        T: 'static + EventEmitter<Event>,
+        Event: 'static;
+
     /// Observes updates to a global through this entity context.
     fn observe_global<G>(&mut self, on_update: impl FnMut(&mut T) + 'static) -> Self::Subscription
     where
         T: 'static,
         G: 'static;
+}
+
+/// The event callback helpers supplied by an entity context implementation.
+pub trait ContextListener<T> {
+    /// The window type passed to event callbacks.
+    type Window;
+    /// The application context passed to event callbacks.
+    type App;
+    /// The entity context passed to event callbacks.
+    type Context<'a>;
+
+    /// Builds a callback that gives an event handler access to entity state.
+    fn listener<E: ?Sized>(
+        &self,
+        callback: impl for<'a> Fn(&mut T, &E, &mut Self::Window, &mut Self::Context<'a>) + 'static,
+    ) -> impl Fn(&E, &mut Self::Window, &mut Self::App) + 'static;
+
+    /// Builds a callback that returns a value from an event handler.
+    fn processor<E, R>(
+        &self,
+        callback: impl for<'a> Fn(&mut T, E, &mut Self::Window, &mut Self::Context<'a>) -> R + 'static,
+    ) -> impl Fn(E, &mut Self::Window, &mut Self::App) -> R + 'static;
 }
 
 /// The foreground spawn operation supplied by an application context.
@@ -206,6 +270,14 @@ pub trait AppContextSpawn {
     where
         AsyncFn: AsyncFnOnce(&mut Self::AsyncContext) -> R + 'static,
         R: 'static;
+
+    /// Spawns a future on a background executor.
+    fn background_spawn<R>(
+        &self,
+        future: impl Future<Output = R> + Send + 'static,
+    ) -> Self::Task<R>
+    where
+        R: Send + 'static;
 }
 
 /// The foreground spawn operation supplied by an entity context.
