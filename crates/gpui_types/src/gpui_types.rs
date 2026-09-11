@@ -729,6 +729,7 @@ pub mod platform {
     }
 }
 
+pub mod accessibility;
 pub mod application;
 pub mod clipboard;
 pub mod context;
@@ -742,6 +743,11 @@ pub mod paths;
 pub mod urls;
 pub mod window;
 
+pub use accessibility::{
+    A11yCallbacks, AccessibleAction, Action, ActionData, ActionRequest, Node, NodeId,
+    NodeIdContent, Orientation, PlatformAccessibilitySpi, Rect, Role, TextPosition, TextSelection,
+    Toggled, Tree, TreeId, TreeUpdate,
+};
 pub use application::*;
 pub use clipboard::*;
 pub use color::*;

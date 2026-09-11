@@ -102,8 +102,8 @@ use crate::*;
 
 pub(crate) mod debug;
 
+use crate::accesskit::{Action, NodeId, TreeUpdate};
 use crate::{App, Bounds, FocusId, Pixels, SharedString, Window};
-use accesskit::{Action, NodeId, TreeUpdate};
 use collections::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use std::hash::{Hash, Hasher};

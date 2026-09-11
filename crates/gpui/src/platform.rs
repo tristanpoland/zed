@@ -71,6 +71,7 @@ use std::{
 use uuid::Uuid;
 
 pub use app_menu::*;
+pub use gpui_types::accessibility::{A11yCallbacks, PlatformAccessibilitySpi, TreeUpdate};
 use gpui_types::clipboard::{
     ClipboardEntry as SharedClipboardEntry, ClipboardItem as SharedClipboardItem,
 };
@@ -763,16 +764,6 @@ impl Tiling {
     }
 }
 
-/// Callbacks for the accessibility adapter.
-pub struct A11yCallbacks {
-    /// Called when the adapter is activated (a screen reader connects).
-    pub activation: Box<dyn Fn() -> Option<accesskit::TreeUpdate> + Send + 'static>,
-    /// Called when an action is requested by the screen reader.
-    pub action: Box<dyn Fn(accesskit::ActionRequest) + Send + 'static>,
-    /// Called when the adapter is deactivated (screen reader disconnects).
-    pub deactivation: Box<dyn Fn() + Send + 'static>,
-}
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[expect(missing_docs)]
 pub struct RequestFrameOptions {
@@ -1000,7 +991,7 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn a11y_init(&self, _callbacks: A11yCallbacks) {}
 
     /// Provide a TreeUpdate to the accessibility adapter.
-    fn a11y_tree_update(&self, _tree_update: accesskit::TreeUpdate) {}
+    fn a11y_tree_update(&self, _tree_update: TreeUpdate) {}
 
     /// Inform the adapter of updated window bounds.
     fn a11y_update_window_bounds(&self) {}
@@ -1016,6 +1007,20 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     #[cfg(any(test, feature = "test-support"))]
     fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
         anyhow::bail!("render_to_image not implemented for this platform")
+    }
+}
+
+impl PlatformAccessibilitySpi for dyn PlatformWindow {
+    fn a11y_init(&self, callbacks: A11yCallbacks) {
+        PlatformWindow::a11y_init(self, callbacks);
+    }
+
+    fn a11y_tree_update(&self, tree_update: TreeUpdate) {
+        PlatformWindow::a11y_tree_update(self, tree_update);
+    }
+
+    fn a11y_update_window_bounds(&self) {
+        PlatformWindow::a11y_update_window_bounds(self);
     }
 }
 

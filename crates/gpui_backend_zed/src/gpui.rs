@@ -83,18 +83,21 @@ pub mod private {
 /// Backend-neutral public type definitions staged for the GPUI facade split.
 pub mod types {
     pub use gpui_types::{
-        AnyEntity, AnyWeakEntity, App, AppContextObserve, AppContextRead, AppContextRuntime,
-        AppContextSpawn, AppContextSpi, AppContextUpdate, AppContextWindow, AppLifecyclePhase,
-        AsKeystroke, Autocapitalize, Context, ContextListener, ContextObserve, ContextSpawn,
-        ContextSpi, CursorStyle, Entity, EntityHandle, EntityHandleRuntime, EntityId,
-        EntityReservation, EntityStorageSpi, InvalidKeystrokeError, KeybindingKeystroke, Keystroke,
-        PathPromptOptions, PlatformApplicationSpi, PlatformCredentialsSpi, PlatformCursorSpi,
-        PlatformKeyboardLayoutSpi, PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi,
-        PlatformSystemNotificationSpi, PlatformTextInputSpi, PlatformUrlSpi, StrongEntityHandle,
-        SubscriptionHandle, SystemNotification, SystemNotificationAction,
+        A11yCallbacks, AccessibleAction, ActionData, ActionRequest, AnyEntity, AnyWeakEntity, App,
+        AppContextObserve, AppContextRead, AppContextRuntime, AppContextSpawn, AppContextSpi,
+        AppContextUpdate, AppContextWindow, AppLifecyclePhase, AsKeystroke, Autocapitalize,
+        Context, ContextListener, ContextObserve, ContextSpawn, ContextSpi, CursorStyle, Entity,
+        EntityHandle, EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi,
+        InvalidKeystrokeError, KeybindingKeystroke, Keystroke, Node, NodeId, Orientation,
+        PathPromptOptions, PlatformAccessibilitySpi, PlatformApplicationSpi,
+        PlatformCredentialsSpi, PlatformCursorSpi, PlatformKeyboardLayoutSpi,
+        PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi,
+        PlatformSystemNotificationSpi, PlatformTextInputSpi, PlatformUrlSpi, Role,
+        StrongEntityHandle, SubscriptionHandle, SystemNotification, SystemNotificationAction,
         SystemNotificationResponse, TaskHandle, TextInputAction, TextInputConfiguration,
-        TextInputStateChange, UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle,
-        clipboard, color, geometry, input, input_method, keyboard, keystroke, platform, window,
+        TextInputStateChange, Tree, TreeId, TreeUpdate, UTF16Selection, VisualContextSpi,
+        WeakEntity, WeakEntityHandle, accessibility, clipboard, color, geometry, input,
+        input_method, keyboard, keystroke, platform, window,
     };
 }
 
@@ -104,9 +107,15 @@ mod seal {
     pub trait Sealed {}
 }
 
-pub use accesskit;
-pub use accesskit::Action as AccessibleAction;
-pub use accesskit::{Orientation, Role, Toggled};
+/// The subset of AccessKit types used by GPUI's public accessibility APIs.
+pub mod accesskit {
+    pub use ::accesskit::{ActionHandler, ActivationHandler};
+    pub use gpui_types::accessibility::{
+        Action, ActionData, ActionRequest, Affine, Node, NodeId, NodeIdContent, Orientation, Point,
+        Rect, Role, Size, TextPosition, TextSelection, Toggled, Tree, TreeId, TreeUpdate, Vec2,
+    };
+}
+
 pub use action::*;
 pub use anyhow::Result;
 pub use app::*;
@@ -125,6 +134,10 @@ pub use gestures::*;
 pub use global::*;
 pub use gpui_macros::{
     AppContext, IntoElement, Render, VisualContext, bench, property_test, register_action, test,
+};
+pub use gpui_types::accessibility::{
+    A11yCallbacks, AccessibleAction, ActionData, ActionRequest, Node, NodeId, Orientation,
+    PlatformAccessibilitySpi, Role, Toggled, Tree, TreeId, TreeUpdate,
 };
 pub use spring::*;
 

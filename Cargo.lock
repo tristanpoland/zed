@@ -7801,6 +7801,7 @@ dependencies = [
 name = "gpui_types"
 version = "0.2.2"
 dependencies = [
+ "accesskit",
  "anyhow",
  "collections",
  "gpui_shared_string",
