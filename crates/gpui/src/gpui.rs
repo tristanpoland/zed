@@ -88,6 +88,7 @@ pub mod types {
         ContextListener, ContextObserve, ContextSpawn, ContextSpi, Entity, EntityHandle,
         EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi, StrongEntityHandle,
         SubscriptionHandle, TaskHandle, VisualContextSpi, WeakEntity, WeakEntityHandle,
+        platform::{CursorStyle, PlatformCursorSpi},
     };
 }
 

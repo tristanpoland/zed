@@ -411,6 +411,8 @@ pub mod input {
 }
 
 pub mod platform {
+    use schemars::JsonSchema;
+    use serde::{Deserialize, Serialize};
     use std::fmt;
 
     /// An opaque identifier for a hardware display.
@@ -424,6 +426,88 @@ pub mod platform {
     /// An identifier for a paint path.
     #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
     pub struct PathId(pub usize);
+
+    /// The style of the cursor (pointer).
+    #[derive(
+        Copy, Clone, Default, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema,
+    )]
+    pub enum CursorStyle {
+        /// The default cursor.
+        #[default]
+        Arrow,
+
+        /// A text input cursor.
+        IBeam,
+
+        /// A crosshair cursor.
+        Crosshair,
+
+        /// A closed hand cursor.
+        ClosedHand,
+
+        /// An open hand cursor.
+        OpenHand,
+
+        /// A pointing hand cursor.
+        PointingHand,
+
+        /// A resize left cursor.
+        ResizeLeft,
+
+        /// A resize right cursor.
+        ResizeRight,
+
+        /// A resize cursor to the left and right.
+        ResizeLeftRight,
+
+        /// A resize up cursor.
+        ResizeUp,
+
+        /// A resize down cursor.
+        ResizeDown,
+
+        /// A resize cursor directing up and down.
+        ResizeUpDown,
+
+        /// A resize cursor directing up-left and down-right.
+        ResizeUpLeftDownRight,
+
+        /// A resize cursor directing up-right and down-left.
+        ResizeUpRightDownLeft,
+
+        /// A cursor indicating that the item/column can be resized horizontally.
+        ResizeColumn,
+
+        /// A cursor indicating that the item/row can be resized vertically.
+        ResizeRow,
+
+        /// A text input cursor for vertical layout.
+        IBeamCursorForVerticalLayout,
+
+        /// A cursor indicating that the operation is not allowed.
+        OperationNotAllowed,
+
+        /// A cursor indicating that the operation will result in a link.
+        DragLink,
+
+        /// A cursor indicating that the operation will result in a copy.
+        DragCopy,
+
+        /// A cursor indicating that the operation will result in a context menu.
+        ContextualMenu,
+    }
+
+    /// Cursor operations supplied by a platform implementation.
+    pub trait PlatformCursorSpi {
+        /// Sets the cursor style for the active application window.
+        fn set_cursor_style(&self, style: CursorStyle);
+
+        /// Hides the cursor until the user moves the mouse over an application window.
+        fn hide_cursor_until_mouse_moves(&self);
+
+        /// Returns whether the platform currently considers the cursor visible.
+        fn is_cursor_visible(&self) -> bool;
+    }
 
     impl DisplayId {
         /// Create an identifier from a raw platform value.

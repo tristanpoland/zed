@@ -85,10 +85,10 @@ pub mod types {
     pub use gpui_types::{
         AnyEntity, AnyWeakEntity, App, AppContextObserve, AppContextRead, AppContextRuntime,
         AppContextSpawn, AppContextSpi, AppContextUpdate, AppContextWindow, Context,
-        ContextListener, ContextObserve, ContextSpawn, ContextSpi, Entity, EntityHandle,
-        EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi, StrongEntityHandle,
-        SubscriptionHandle, TaskHandle, VisualContextSpi, WeakEntity, WeakEntityHandle, color,
-        geometry, input, platform,
+        ContextListener, ContextObserve, ContextSpawn, ContextSpi, CursorStyle, Entity,
+        EntityHandle, EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi,
+        PlatformCursorSpi, StrongEntityHandle, SubscriptionHandle, TaskHandle, VisualContextSpi,
+        WeakEntity, WeakEntityHandle, color, geometry, input, platform,
     };
 }
 

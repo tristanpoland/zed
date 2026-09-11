@@ -5211,7 +5211,7 @@ impl Window {
                 .rendered_frame
                 .cursor_style(self)
                 .unwrap_or(CursorStyle::Arrow);
-            cx.platform.set_cursor_style(style);
+            crate::PlatformCursorSpi::set_cursor_style(cx.platform.as_ref(), style);
         }
     }
 
@@ -5703,7 +5703,7 @@ impl Window {
                     CursorHideMode::OnTyping | CursorHideMode::OnTypingAndAction
                 )
             {
-                cx.platform.hide_cursor_until_mouse_moves();
+                crate::PlatformCursorSpi::hide_cursor_until_mouse_moves(cx.platform.as_ref());
             }
         }
 
@@ -6110,7 +6110,7 @@ impl Window {
             && cx.cursor_hide_mode == CursorHideMode::OnTypingAndAction
             && self.last_input_was_keyboard()
         {
-            cx.platform.hide_cursor_until_mouse_moves();
+            crate::PlatformCursorSpi::hide_cursor_until_mouse_moves(cx.platform.as_ref());
         }
     }
 

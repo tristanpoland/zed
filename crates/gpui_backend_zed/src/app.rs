@@ -1050,7 +1050,7 @@ impl App {
     ///
     /// See [`App::set_cursor_hide_mode`].
     pub fn is_cursor_visible(&self) -> bool {
-        self.platform.is_cursor_visible()
+        crate::PlatformCursorSpi::is_cursor_visible(self.platform.as_ref())
     }
 
     /// Returns whether non-essential animations (e.g. loading spinners) should
