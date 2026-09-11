@@ -90,13 +90,17 @@ pub mod types {
         InvalidKeystrokeError, KeybindingKeystroke, Keystroke, PathPromptOptions,
         PlatformKeyboardLayoutSpi, PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi,
         PlatformTextInputSpi, StrongEntityHandle, SubscriptionHandle, TaskHandle, TextInputAction,
-        TextInputConfiguration, TextInputStateChange, UTF16Selection, VisualContextSpi, WeakEntity,
-        WeakEntityHandle, clipboard, input_method, keyboard, keystroke,
+        TextInputConfiguration, TextInputStateChange, TitlebarOptions, UTF16Selection,
+        VisualContextSpi, WeakEntity, WeakEntityHandle, WindowAppearance,
+        WindowBackgroundAppearance, WindowButton, WindowButtonLayout, WindowDecorations, clipboard,
+        color, geometry, input_method, keyboard, keystroke,
         platform::{
-            AppLifecyclePhase, CursorStyle, PlatformApplicationSpi, PlatformCredentialsSpi,
-            PlatformCursorSpi, PlatformSystemNotificationSpi, PlatformUrlSpi, SystemNotification,
-            SystemNotificationAction, SystemNotificationResponse,
+            AppLifecyclePhase, CursorStyle, DisplayId, PlatformApplicationSpi,
+            PlatformCredentialsSpi, PlatformCursorSpi, PlatformSystemNotificationSpi,
+            PlatformUrlSpi, SystemNotification, SystemNotificationAction,
+            SystemNotificationResponse,
         },
+        window,
     };
 }
 

@@ -7801,6 +7801,7 @@ dependencies = [
 name = "gpui_types"
 version = "0.2.2"
 dependencies = [
+ "anyhow",
  "collections",
  "gpui_shared_string",
  "schemars 1.0.4",

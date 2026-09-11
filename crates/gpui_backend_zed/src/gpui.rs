@@ -94,7 +94,7 @@ pub mod types {
         SubscriptionHandle, SystemNotification, SystemNotificationAction,
         SystemNotificationResponse, TaskHandle, TextInputAction, TextInputConfiguration,
         TextInputStateChange, UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle,
-        clipboard, color, geometry, input, input_method, keyboard, keystroke, platform,
+        clipboard, color, geometry, input, input_method, keyboard, keystroke, platform, window,
     };
 }
 
