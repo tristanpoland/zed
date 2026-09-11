@@ -4,15 +4,49 @@ use std::any::{Any, TypeId};
 
 /// The entity-storage capability required by a GPUI application context.
 ///
-/// This is intentionally limited to metadata operations. Typed creation,
-/// reads, and updates still run through the public GPUI context methods so
-/// their callbacks can receive the implementation's real context type.
+/// The state operations are type-erased so implementations can provide their
+/// own storage without depending on GPUI. Typed callbacks still run through
+/// the public GPUI context methods so they can receive the implementation's
+/// real context type.
 pub trait EntityStorageSpi {
     /// Returns whether an entity with the given identifier is stored.
     fn contains(&self, entity_id: EntityId) -> bool;
 
     /// Returns the concrete type stored for an entity, if it exists.
     fn entity_type(&self, entity_id: EntityId) -> Option<TypeId>;
+
+    /// Reserves an entity identifier and its handle lifetime for a later insertion.
+    fn reserve(&self) -> EntityReservation;
+
+    /// Inserts type-erased state into a previously reserved entity slot.
+    fn insert(&mut self, reservation: EntityReservation, entity: Box<dyn Any>) -> EntityId;
+
+    /// Temporarily removes type-erased state so an entity can be updated.
+    fn lease(&mut self, entity_id: EntityId) -> Option<Box<dyn Any>>;
+
+    /// Returns type-erased state for a read-only entity operation.
+    fn read(&self, entity_id: EntityId) -> Option<&dyn Any>;
+
+    /// Returns leased state to the storage after an update.
+    fn end_lease(&mut self, entity_id: EntityId, entity: Box<dyn Any>);
+}
+
+/// A token for an entity slot reserved by an [`EntityStorageSpi`].
+#[derive(Clone, Copy, Debug)]
+pub struct EntityReservation {
+    entity_id: EntityId,
+}
+
+impl EntityReservation {
+    /// Creates a reservation for an entity identifier.
+    pub fn new(entity_id: EntityId) -> Self {
+        Self { entity_id }
+    }
+
+    /// Returns the identifier associated with this reservation.
+    pub fn entity_id(self) -> EntityId {
+        self.entity_id
+    }
 }
 
 /// The application capability required by a GPUI context implementation.

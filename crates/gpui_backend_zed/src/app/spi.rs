@@ -3,7 +3,7 @@ pub use gpui_types::{
     TaskHandle, WeakEntityHandle,
 };
 
-use crate::{AnyEntity, AnyWeakEntity, App, Entity, EntityId, Subscription, Task, WeakEntity};
+use crate::{AnyEntity, AnyWeakEntity, App, Entity, EntityId, Subscription, WeakEntity};
 
 impl AppContextSpi for App {
     fn entity_storage(&self) -> &dyn EntityStorageSpi {
@@ -48,12 +48,6 @@ impl EntityHandle for AnyEntity {
 impl EntityHandle for AnyWeakEntity {
     fn entity_id(&self) -> EntityId {
         AnyWeakEntity::entity_id(self)
-    }
-}
-
-impl<T> TaskHandle<T> for Task<T> {
-    fn detach(self) {
-        Task::detach(self)
     }
 }
 

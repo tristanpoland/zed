@@ -2,7 +2,7 @@ use crate::{App, AppContext, GpuiBorrow, VisualContext, Window, seal::Sealed};
 use anyhow::{Context as _, Result};
 use collections::FxHashSet;
 use derive_more::{Deref, DerefMut};
-use gpui_types::EntityStorageSpi;
+use gpui_types::{EntityReservation, EntityStorageSpi};
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use slotmap::{SecondaryMap, SlotMap};
 use std::{
@@ -85,8 +85,11 @@ impl EntityMap {
 
     /// Reserve a slot for an entity, which you can subsequently use with `insert`.
     pub fn reserve<T: 'static>(&self) -> Slot<T> {
-        let id = self.ref_counts.write().counts.insert(1.into());
-        Slot(Entity::new(id, Arc::downgrade(&self.ref_counts)))
+        let reservation = <Self as EntityStorageSpi>::reserve(self);
+        Slot(Entity::new(
+            reservation.entity_id(),
+            Arc::downgrade(&self.ref_counts),
+        ))
     }
 
     pub fn contains(&self, entity_id: EntityId) -> bool {
@@ -104,11 +107,12 @@ impl EntityMap {
     where
         T: 'static,
     {
-        let mut accessed_entities = self.accessed_entities.get_mut();
-        accessed_entities.insert(slot.entity_id);
-
         let handle = slot.0;
-        self.entities.insert(handle.entity_id, Box::new(entity));
+        <Self as EntityStorageSpi>::insert(
+            self,
+            EntityReservation::new(handle.entity_id),
+            Box::new(entity),
+        );
         handle
     }
 
@@ -116,12 +120,8 @@ impl EntityMap {
     #[track_caller]
     pub fn lease<T>(&mut self, pointer: &Entity<T>) -> Lease<T> {
         self.assert_valid_context(pointer);
-        let mut accessed_entities = self.accessed_entities.get_mut();
-        accessed_entities.insert(pointer.entity_id);
-
         let entity = Some(
-            self.entities
-                .remove(pointer.entity_id)
+            <Self as EntityStorageSpi>::lease(self, pointer.entity_id)
                 .unwrap_or_else(|| double_lease_panic::<T>("update")),
         );
         Lease {
@@ -133,16 +133,12 @@ impl EntityMap {
 
     /// Returns an entity after moving it to the stack.
     pub fn end_lease<T>(&mut self, mut lease: Lease<T>) {
-        self.entities.insert(lease.id, lease.entity.take().unwrap());
+        <Self as EntityStorageSpi>::end_lease(self, lease.id, lease.entity.take().unwrap());
     }
 
     pub fn read<T: 'static>(&self, entity: &Entity<T>) -> &T {
         self.assert_valid_context(entity);
-        let mut accessed_entities = self.accessed_entities.borrow_mut();
-        accessed_entities.insert(entity.entity_id);
-
-        self.entities
-            .get(entity.entity_id)
+        <Self as EntityStorageSpi>::read(self, entity.entity_id)
             .and_then(|entity| entity.downcast_ref())
             .unwrap_or_else(|| double_lease_panic::<T>("read"))
     }
@@ -193,6 +189,32 @@ impl EntityStorageSpi for EntityMap {
 
     fn entity_type(&self, entity_id: EntityId) -> Option<TypeId> {
         self.entity_type(entity_id)
+    }
+
+    fn reserve(&self) -> EntityReservation {
+        let entity_id = self.ref_counts.write().counts.insert(1.into());
+        EntityReservation::new(entity_id)
+    }
+
+    fn insert(&mut self, reservation: EntityReservation, entity: Box<dyn Any>) -> EntityId {
+        let entity_id = reservation.entity_id();
+        self.accessed_entities.get_mut().insert(entity_id);
+        self.entities.insert(entity_id, entity);
+        entity_id
+    }
+
+    fn lease(&mut self, entity_id: EntityId) -> Option<Box<dyn Any>> {
+        self.accessed_entities.get_mut().insert(entity_id);
+        self.entities.remove(entity_id)
+    }
+
+    fn read(&self, entity_id: EntityId) -> Option<&dyn Any> {
+        self.accessed_entities.borrow_mut().insert(entity_id);
+        self.entities.get(entity_id).map(|entity| entity.as_ref())
+    }
+
+    fn end_lease(&mut self, entity_id: EntityId, entity: Box<dyn Any>) {
+        self.entities.insert(entity_id, entity);
     }
 }
 

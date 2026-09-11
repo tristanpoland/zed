@@ -31,6 +31,7 @@ backtrace.workspace = true
 chrono.workspace = true
 flume.workspace = true
 futures.workspace = true
+gpui_types.workspace = true
 parking_lot.workspace = true
 rand.workspace = true
 web-time.workspace = true

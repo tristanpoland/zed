@@ -381,6 +381,12 @@ impl DedicatedExecutor {
 #[must_use]
 pub struct Task<T>(TaskState<T>);
 
+impl<T> gpui_types::TaskHandle<T> for Task<T> {
+    fn detach(self) {
+        Task::detach(self)
+    }
+}
+
 enum TaskState<T> {
     /// A task that is ready to return a value
     Ready(Option<T>),
