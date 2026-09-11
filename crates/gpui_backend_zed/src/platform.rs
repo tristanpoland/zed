@@ -77,7 +77,7 @@ use gpui_types::clipboard::{
 pub use gpui_types::clipboard::{
     ClipboardReadError, ClipboardString, ImageFormat, PlatformClipboardSpi,
 };
-pub use gpui_types::platform::{CursorStyle, PlatformCursorSpi};
+pub use gpui_types::platform::{CursorStyle, PlatformCredentialsSpi, PlatformCursorSpi};
 /// A clipboard entry using GPUI's runtime image type.
 pub type ClipboardEntry = SharedClipboardEntry<Image>;
 /// A clipboard item using GPUI's runtime image type.
@@ -412,6 +412,31 @@ impl PlatformClipboardSpi for dyn Platform {
 
     fn clear_clipboard(&self) {
         Platform::clear_clipboard(self);
+    }
+}
+
+impl PlatformCredentialsSpi for dyn Platform {
+    type Task<T> = Task<T>;
+    type Error = anyhow::Error;
+
+    fn write_credentials(
+        &self,
+        url: &str,
+        username: &str,
+        password: &[u8],
+    ) -> Self::Task<Result<(), Self::Error>> {
+        Platform::write_credentials(self, url, username, password)
+    }
+
+    fn read_credentials(
+        &self,
+        url: &str,
+    ) -> Self::Task<Result<Option<(String, Vec<u8>)>, Self::Error>> {
+        Platform::read_credentials(self, url)
+    }
+
+    fn delete_credentials(&self, url: &str) -> Self::Task<Result<(), Self::Error>> {
+        Platform::delete_credentials(self, url)
     }
 }
 

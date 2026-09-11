@@ -415,6 +415,7 @@ pub mod platform {
         ClipboardEntry, ClipboardImage, ClipboardItem, ClipboardReadError, ClipboardString,
         ExternalPaths, ImageFormat, PlatformClipboardSpi,
     };
+    pub use crate::credentials::PlatformCredentialsSpi;
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
     use std::fmt;
@@ -541,11 +542,13 @@ pub mod platform {
 
 pub mod clipboard;
 pub mod context;
+pub mod credentials;
 pub mod entity;
 
 pub use clipboard::*;
 pub use color::*;
 pub use context::*;
+pub use credentials::*;
 pub use entity::*;
 pub use geometry::*;
 pub use input::*;

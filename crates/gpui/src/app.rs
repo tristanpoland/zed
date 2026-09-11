@@ -1514,17 +1514,22 @@ impl App {
         username: &str,
         password: &[u8],
     ) -> Task<Result<()>> {
-        self.platform.write_credentials(url, username, password)
+        crate::PlatformCredentialsSpi::write_credentials(
+            self.platform.as_ref(),
+            url,
+            username,
+            password,
+        )
     }
 
     /// Reads credentials from the platform keychain.
     pub fn read_credentials(&self, url: &str) -> Task<Result<Option<(String, Vec<u8>)>>> {
-        self.platform.read_credentials(url)
+        crate::PlatformCredentialsSpi::read_credentials(self.platform.as_ref(), url)
     }
 
     /// Deletes credentials from the platform keychain.
     pub fn delete_credentials(&self, url: &str) -> Task<Result<()>> {
-        self.platform.delete_credentials(url)
+        crate::PlatformCredentialsSpi::delete_credentials(self.platform.as_ref(), url)
     }
 
     /// Directs the platform's default browser to open the given URL.
