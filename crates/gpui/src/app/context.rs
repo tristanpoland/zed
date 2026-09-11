@@ -309,7 +309,7 @@ impl<'a, T: 'static> Context<'a, T> {
     ) {
         let view = self.weak_entity();
         let entity_id = self.entity_id();
-        self.ensure_window(entity_id, window.handle.id);
+        self.ensure_window(entity_id, window.handle.window_id());
         self.app.defer(move |cx| {
             cx.with_window(entity_id, |window, cx| {
                 view.update(cx, |view, cx| f(view, window, cx)).ok();
@@ -332,7 +332,7 @@ impl<'a, T: 'static> Context<'a, T> {
         let observed = observed.downgrade();
         let observer = self.weak_entity();
         let observer_id = self.entity_id();
-        self.ensure_window(observer_id, window.handle.id);
+        self.ensure_window(observer_id, window.handle.window_id());
         self.new_observer(
             observed_id,
             Box::new(move |cx| {
@@ -365,7 +365,7 @@ impl<'a, T: 'static> Context<'a, T> {
         let emitter = emitter.downgrade();
         let subscriber = self.weak_entity();
         let subscriber_id = self.entity_id();
-        self.ensure_window(subscriber_id, window.handle.id);
+        self.ensure_window(subscriber_id, window.handle.window_id());
         self.new_subscription(
             emitter.entity_id(),
             (

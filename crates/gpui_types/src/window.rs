@@ -6,8 +6,250 @@ use crate::{
     platform::DisplayId,
 };
 use gpui_shared_string::SharedString;
-use std::{fmt::Debug, rc::Rc};
+use std::{
+    any::TypeId,
+    fmt::{self, Debug},
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    rc::Rc,
+};
 use uuid::Uuid;
+
+slotmap::new_key_type! {
+    /// A unique identifier for a window.
+    pub struct WindowId;
+}
+
+impl WindowId {
+    /// Converts this window ID to a `u64`.
+    pub fn as_u64(&self) -> u64 {
+        self.0.as_ffi()
+    }
+}
+
+impl From<u64> for WindowId {
+    fn from(value: u64) -> Self {
+        WindowId(slotmap::KeyData::from_ffi(value))
+    }
+}
+
+/// A handle to a window with any root view type.
+///
+/// This handle identifies a window but does not keep it alive. Operations that
+/// access the window's state are implemented by the GPUI backend.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct AnyWindowHandle {
+    id: WindowId,
+    state_type: TypeId,
+    root_entity_type_name: &'static str,
+}
+
+impl AnyWindowHandle {
+    /// Get the ID of this window.
+    pub fn window_id(&self) -> WindowId {
+        self.id
+    }
+
+    /// Returns the name of the window's declared root entity type.
+    pub fn root_entity_type_name(&self) -> &'static str {
+        self.root_entity_type_name
+    }
+
+    /// Attempt to convert this handle to a window handle with a specific root view type.
+    /// If the types do not match, this will return `None`.
+    pub fn downcast<T: 'static>(&self) -> Option<WindowHandle<T>> {
+        if TypeId::of::<T>() == self.state_type {
+            Some(WindowHandle {
+                any_handle: *self,
+                state_type: PhantomData,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn new<V: 'static>(id: WindowId) -> Self {
+        Self {
+            id,
+            state_type: TypeId::of::<V>(),
+            root_entity_type_name: std::any::type_name::<V>(),
+        }
+    }
+}
+
+/// A handle to a window with a specific root view type.
+///
+/// Note that this does not keep the window alive on its own. Operations that
+/// access the window's state are implemented by the GPUI backend.
+pub struct WindowHandle<V> {
+    any_handle: AnyWindowHandle,
+    state_type: PhantomData<fn(V) -> V>,
+}
+
+impl<V> Debug for WindowHandle<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WindowHandle")
+            .field("any_handle", &self.any_handle.id.as_u64())
+            .finish()
+    }
+}
+
+impl<V: 'static> WindowHandle<V> {
+    /// Creates a new handle from a window ID.
+    /// This does not check if the root type of the window is `V`.
+    pub fn new(id: WindowId) -> Self {
+        Self {
+            any_handle: AnyWindowHandle::new::<V>(id),
+            state_type: PhantomData,
+        }
+    }
+
+    /// Gets the root view out of this window.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn root<C>(&self, cx: &mut C) -> C::WindowResult<C::Entity<V>>
+    where
+        C: crate::AppContextWindow<
+            AnyWindowHandle = AnyWindowHandle,
+            WindowHandle<V> = WindowHandle<V>,
+        >,
+    {
+        cx.spi_read_window(self, |root_view, _| root_view)
+    }
+
+    /// Updates the root view of this window.
+    pub fn update<C, R>(
+        &self,
+        cx: &mut C,
+        update: impl FnOnce(
+            &mut V,
+            &mut C::Window,
+            &mut C::WindowContext<'_, V>,
+        ) -> R,
+    ) -> C::WindowResult<R>
+    where
+        C: crate::AppContextWindow<
+            AnyWindowHandle = AnyWindowHandle,
+            WindowHandle<V> = WindowHandle<V>,
+        >,
+    {
+        cx.spi_update_window_entity(self, update)
+    }
+
+    /// Reads the root view of this window.
+    pub fn read<'a, C>(&self, cx: &'a C) -> C::WindowResult<&'a V>
+    where
+        C: crate::WindowRootReadSpi<
+            AnyWindowHandle = AnyWindowHandle,
+            WindowHandle<V> = WindowHandle<V>,
+        >,
+    {
+        cx.spi_read_window_root(self)
+    }
+
+    /// Reads the root view of this window with a callback.
+    pub fn read_with<C, R>(
+        &self,
+        cx: &C,
+        read_with: impl FnOnce(&V, &C::App) -> R,
+    ) -> C::WindowResult<R>
+    where
+        C: crate::AppContextWindow<
+            AnyWindowHandle = AnyWindowHandle,
+            WindowHandle<V> = WindowHandle<V>,
+        >,
+    {
+        cx.spi_read_window_root_with(self, read_with)
+    }
+
+    /// Reads the root entity of this window.
+    pub fn entity<C>(&self, cx: &C) -> C::WindowResult<C::Entity<V>>
+    where
+        C: crate::AppContextWindow<
+            AnyWindowHandle = AnyWindowHandle,
+            WindowHandle<V> = WindowHandle<V>,
+        >,
+    {
+        cx.spi_read_window(self, |root_view, _| root_view)
+    }
+
+    /// Checks if this window is active.
+    pub fn is_active<C>(&self, cx: &mut C) -> Option<bool>
+    where
+        C: crate::AppContextWindow<AnyWindowHandle = AnyWindowHandle>,
+    {
+        cx.spi_window_is_active((*self).into())
+    }
+}
+
+impl<V> Deref for WindowHandle<V> {
+    type Target = AnyWindowHandle;
+
+    fn deref(&self) -> &Self::Target {
+        &self.any_handle
+    }
+}
+
+impl<V> DerefMut for WindowHandle<V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.any_handle
+    }
+}
+
+impl<V> Copy for WindowHandle<V> {}
+
+impl<V> Clone for WindowHandle<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V> PartialEq for WindowHandle<V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.any_handle == other.any_handle
+    }
+}
+
+impl<V> Eq for WindowHandle<V> {}
+
+impl<V> Hash for WindowHandle<V> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.any_handle.hash(state);
+    }
+}
+
+impl<V: 'static> From<WindowHandle<V>> for AnyWindowHandle {
+    fn from(value: WindowHandle<V>) -> Self {
+        value.any_handle
+    }
+}
+
+impl AnyWindowHandle {
+    /// Updates the state of the root view of this window.
+    pub fn update<C, R>(
+        self,
+        cx: &mut C,
+        update: impl FnOnce(C::AnyView, &mut C::Window, &mut C::App) -> R,
+    ) -> C::WindowResult<R>
+    where
+        C: crate::AppContextWindow<AnyWindowHandle = AnyWindowHandle>,
+    {
+        cx.spi_update_window(self, update)
+    }
+
+    /// Reads the state of the root view of this window.
+    pub fn read<T, C, R>(
+        self,
+        cx: &C,
+        read: impl FnOnce(C::Entity<T>, &C::App) -> R,
+    ) -> C::WindowResult<R>
+    where
+        C: crate::AppContextWindow<AnyWindowHandle = AnyWindowHandle>,
+        T: 'static,
+    {
+        cx.spi_read_window_any(self, read)
+    }
+}
 
 /// A type to describe whether a window uses server- or client-side decorations.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]

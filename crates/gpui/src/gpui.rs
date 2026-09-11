@@ -86,7 +86,7 @@ pub mod types {
         A11yCallbacks, AccessibleAction, ActionData, ActionRequest, AnyEntity, AnyWeakEntity, App,
         AppContextCore, AppContextObserve, AppContextRead, AppContextRuntime, AppContextSpawn,
         AppContextSpi,
-        AppContextUpdate, AppContextWindow, AsKeystroke, Autocapitalize, BackendSpi,
+        AppContextUpdate, AppContextWindow, AnyWindowHandle, AsKeystroke, Autocapitalize, BackendSpi,
         BackgroundExecutorSpi, Context, ContextListener, ContextObserve, ContextSpawn, ContextSpi,
         DispatcherSpi, Entity, EntityHandle, EntityHandleRuntime,
         EntityId, EntityReservation, EntityStorageSpi, InvalidKeystrokeError, KeybindingKeystroke,
@@ -96,7 +96,8 @@ pub mod types {
         PlatformWindowSpi, PlatformWindowingSpi, RequestFrameOptions, Role, StrongEntityHandle,
         RuntimeSpi, SubscriptionHandle, Task, TaskHandle, TextInputAction, TextInputConfiguration,
         TextInputStateChange, TitlebarOptions, Tree, TreeId, TreeUpdate, UTF16Selection,
-        VisualContextSpi, WeakEntity, WeakEntityHandle, WindowAppearance,
+        VisualContextSpi, WeakEntity, WeakEntityHandle, WindowAppearance, WindowHandle, WindowId,
+        WindowRootReadSpi,
         WindowBackgroundAppearance, WindowButton, WindowButtonLayout, WindowDecorations,
         accessibility, clipboard, color, geometry, input_method, keyboard, keystroke,
         platform::{
@@ -175,6 +176,7 @@ macro_rules! bench_main {
     };
 }
 pub use gpui_shared_string::*;
+pub use gpui_types::{AnyWindowHandle, WindowHandle, WindowId, WindowRootReadSpi};
 pub use gpui_types::{EventEmitter, Global};
 pub use gpui_util::arc_cow::ArcCow;
 pub use http_client;

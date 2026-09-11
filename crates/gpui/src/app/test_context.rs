@@ -567,7 +567,7 @@ impl TestAppContext {
         self.app
             .borrow_mut()
             .windows
-            .get_mut(window.id)
+            .get_mut(window.window_id())
             .unwrap()
             .as_deref_mut()
             .unwrap()
@@ -1165,18 +1165,6 @@ impl VisualContext for VisualTestContext {
                 view.read(cx).focus_handle(cx).focus(window, cx)
             })
             .expect("window was unexpectedly closed")
-    }
-}
-
-impl AnyWindowHandle {
-    /// Creates the given view in this window.
-    pub fn build_entity<V: Render + 'static>(
-        &self,
-        cx: &mut TestAppContext,
-        build_view: impl FnOnce(&mut Window, &mut Context<V>) -> V,
-    ) -> Entity<V> {
-        self.update(cx, |_, window, cx| cx.new(|cx| build_view(window, cx)))
-            .unwrap()
     }
 }
 

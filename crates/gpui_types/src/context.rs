@@ -92,6 +92,10 @@ pub trait AppContextWindow {
     type Window;
     /// The application context passed to window callbacks.
     type App;
+    /// The typed entity context passed to window callbacks.
+    type WindowContext<'a, T>
+    where
+        Self: 'a;
     /// The type-erased window handle.
     type AnyWindowHandle: Copy;
     /// The typed window handle family.
@@ -108,6 +112,19 @@ pub trait AppContextWindow {
     where
         F: FnOnce(Self::AnyView, &mut Self::Window, &mut Self::App) -> T;
 
+    /// Updates a window's typed root entity.
+    fn spi_update_window_entity<T, R>(
+        &mut self,
+        window: &crate::WindowHandle<T>,
+        update: impl FnOnce(
+            &mut T,
+            &mut Self::Window,
+            &mut Self::WindowContext<'_, T>,
+        ) -> R,
+    ) -> Self::WindowResult<R>
+    where
+        T: 'static;
+
     /// Runs a callback against the current window for an entity, if available.
     fn spi_with_window<R>(
         &mut self,
@@ -121,6 +138,38 @@ pub trait AppContextWindow {
         window: &Self::WindowHandle<T>,
         read: impl FnOnce(Self::Entity<T>, &Self::App) -> R,
     ) -> Self::WindowResult<R>
+    where
+        T: 'static;
+
+    /// Reads a typed root entity through a type-erased window handle.
+    fn spi_read_window_any<T, R>(
+        &self,
+        window: crate::AnyWindowHandle,
+        read: impl FnOnce(Self::Entity<T>, &Self::App) -> R,
+    ) -> Self::WindowResult<R>
+    where
+        T: 'static;
+
+    /// Reads a window's typed root entity through a callback.
+    fn spi_read_window_root_with<T, R>(
+        &self,
+        window: &crate::WindowHandle<T>,
+        read: impl FnOnce(&T, &Self::App) -> R,
+    ) -> Self::WindowResult<R>
+    where
+        T: 'static;
+
+    /// Returns whether a window is active, or `None` if it is unavailable.
+    fn spi_window_is_active(&mut self, window: crate::AnyWindowHandle) -> Option<bool>;
+}
+
+/// The root-view read capability supplied by an application context.
+pub trait WindowRootReadSpi: AppContextWindow {
+    /// Reads a typed root view while retaining the context borrow.
+    fn spi_read_window_root<'a, T>(
+        &'a self,
+        window: &crate::WindowHandle<T>,
+    ) -> Self::WindowResult<&'a T>
     where
         T: 'static;
 }

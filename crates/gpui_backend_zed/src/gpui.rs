@@ -87,7 +87,7 @@ pub mod types {
         A11yCallbacks, AccessibleAction, ActionData, ActionRequest, AnyEntity, AnyWeakEntity, App,
         AppContextCore, AppContextObserve, AppContextRead, AppContextRuntime, AppContextSpawn,
         AppContextSpi,
-        AppContextUpdate, AppContextWindow, AppLifecyclePhase, AsKeystroke, Autocapitalize,
+        AppContextUpdate, AppContextWindow, AnyWindowHandle, AppLifecyclePhase, AsKeystroke, Autocapitalize,
         BackendSpi, BackgroundExecutorSpi,
         Context, ContextListener, ContextObserve, ContextSpawn, ContextSpi, CursorStyle,
         DispatcherSpi, Entity,
@@ -101,7 +101,8 @@ pub mod types {
         SystemNotification, SystemNotificationAction, SystemNotificationResponse, RuntimeSpi, Task,
         TaskHandle,
         TextInputAction, TextInputConfiguration, TextInputStateChange, Tree, TreeId, TreeUpdate,
-        UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle, accessibility, clipboard,
+        UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle, WindowHandle, WindowId,
+        WindowRootReadSpi, accessibility, clipboard,
         color, geometry, input, input_method, keyboard, keystroke, platform, window,
     };
 }
@@ -172,6 +173,7 @@ macro_rules! bench_main {
     };
 }
 pub use gpui_shared_string::*;
+pub use gpui_types::{AnyWindowHandle, WindowHandle, WindowId, WindowRootReadSpi};
 pub use gpui_types::{EventEmitter, Global};
 pub use gpui_util::arc_cow::ArcCow;
 pub use http_client;

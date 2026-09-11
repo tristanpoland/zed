@@ -370,7 +370,7 @@ impl SystemWindowTab {
     /// Create a new instance of the window tab.
     pub fn new(title: SharedString, handle: AnyWindowHandle) -> Self {
         Self {
-            id: handle.id,
+            id: handle.window_id(),
             title,
             handle,
             last_active_at: Instant::now(),
@@ -1154,26 +1154,26 @@ impl App {
         entities: &FxHashSet<EntityId>,
     ) {
         let mut tracked_entities =
-            std::mem::take(self.tracked_entities.entry(window_handle.id).or_default());
+            std::mem::take(self.tracked_entities.entry(window_handle.window_id()).or_default());
         for entity in tracked_entities.iter() {
             self.window_invalidators_by_entity
                 .entry(*entity)
                 .and_modify(|windows| {
-                    windows.remove(&window_handle.id);
+                    windows.remove(&window_handle.window_id());
                 });
         }
         for entity in entities.iter() {
             self.window_invalidators_by_entity
                 .entry(*entity)
                 .or_default()
-                .insert(window_handle.id, invalidator.clone());
+                .insert(window_handle.window_id(), invalidator.clone());
             self.current_window_by_entity
-                .insert(*entity, window_handle.id);
+                .insert(*entity, window_handle.window_id());
         }
         tracked_entities.clear();
         tracked_entities.extend(entities.iter().copied());
         self.tracked_entities
-            .insert(window_handle.id, tracked_entities);
+            .insert(window_handle.window_id(), tracked_entities);
     }
 
     pub(crate) fn new_observer(&mut self, key: EntityId, value: Handler) -> Subscription {
@@ -1943,7 +1943,7 @@ impl App {
 
             let root_view = window.root.clone().unwrap();
 
-            cx.window_update_stack.push(window.handle.id);
+            cx.window_update_stack.push(window.handle.window_id());
             let result = update(root_view, &mut window, cx);
             fn trail(id: WindowId, window: Box<Window>, cx: &mut App) -> Option<()> {
                 cx.window_update_stack.pop();
@@ -2906,7 +2906,7 @@ impl AppContext for App {
     where
         F: FnOnce(AnyView, &mut Window, &mut App) -> T,
     {
-        self.update_window_id(handle.id, update)
+        self.update_window_id(handle.window_id(), update)
     }
 
     fn with_window<R>(
@@ -2927,7 +2927,7 @@ impl AppContext for App {
     {
         let window = self
             .windows
-            .get(window.id)
+            .get(window.window_id())
             .context("window not found")?
             .as_deref()
             .expect("attempted to read a window that is already on the stack");
