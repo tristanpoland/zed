@@ -80,10 +80,12 @@ pub mod private {
     pub use serde_json;
 }
 
-/// Data-only types staged for sharing between the public API and this implementation.
-#[doc(hidden)]
+/// Backend-neutral public type definitions staged for the GPUI facade split.
 pub mod types {
-    pub use gpui_types::{color, geometry, input, platform};
+    pub use gpui_types::{
+        AnyEntity, AnyWeakEntity, App, AppContextRuntime, Context, Entity, EntityHandleRuntime,
+        EntityId, WeakEntity, color, geometry, input, platform,
+    };
 }
 
 mod seal {

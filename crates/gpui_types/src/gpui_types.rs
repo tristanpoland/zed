@@ -436,42 +436,11 @@ pub mod platform {
     }
 }
 
-pub mod entity {
-    use slotmap::KeyData;
-    use std::fmt;
-    use std::num::NonZeroU64;
-
-    slotmap::new_key_type! {
-        /// A unique identifier for an entity across an application.
-        pub struct EntityId;
-    }
-
-    impl From<u64> for EntityId {
-        fn from(value: u64) -> Self {
-            Self(KeyData::from_ffi(value))
-        }
-    }
-
-    impl EntityId {
-        /// Converts this entity id to a [`NonZeroU64`].
-        pub fn as_non_zero_u64(self) -> NonZeroU64 {
-            NonZeroU64::new(self.0.as_ffi()).unwrap()
-        }
-
-        /// Converts this entity id to a `u64`.
-        pub fn as_u64(self) -> u64 {
-            self.0.as_ffi()
-        }
-    }
-
-    impl fmt::Display for EntityId {
-        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(formatter, "{}", self.as_u64())
-        }
-    }
-}
+pub mod context;
+pub mod entity;
 
 pub use color::*;
+pub use context::*;
 pub use entity::*;
 pub use geometry::*;
 pub use input::*;

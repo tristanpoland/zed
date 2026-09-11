@@ -2,7 +2,7 @@ use crate::{App, AppContext, GpuiBorrow, VisualContext, Window, seal::Sealed};
 use anyhow::{Context as _, Result};
 use collections::FxHashSet;
 use derive_more::{Deref, DerefMut};
-use gpui_types::{EntityReservation, EntityStorageSpi};
+use gpui_types::{AppContextRuntime, EntityHandleRuntime, EntityReservation, EntityStorageSpi};
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use slotmap::{SecondaryMap, SlotMap};
 use std::{
@@ -12,6 +12,7 @@ use std::{
     fmt,
     hash::{Hash, Hasher},
     marker::PhantomData,
+    rc::Rc,
     sync::{
         Arc, Weak,
         atomic::{AtomicU64, AtomicUsize, Ordering::SeqCst},
@@ -38,6 +39,69 @@ pub(crate) struct EntityRefCounts {
     dropped_entity_ids: Vec<EntityId>,
     #[cfg(any(test, feature = "leak-detection"))]
     leak_detector: LeakDetector,
+}
+
+struct SharedEntityRuntime {
+    ref_counts: Weak<RwLock<EntityRefCounts>>,
+}
+
+impl AppContextRuntime for EntityMap {
+    fn entity_runtime(&self) -> Rc<dyn EntityHandleRuntime> {
+        Rc::new(SharedEntityRuntime {
+            ref_counts: Arc::downgrade(&self.ref_counts),
+        })
+    }
+}
+
+impl EntityHandleRuntime for SharedEntityRuntime {
+    fn retain(&self, entity_id: EntityId) {
+        if let Some(ref_counts) = self.ref_counts.upgrade() {
+            let ref_counts = ref_counts.read();
+            if let Some(count) = ref_counts.counts.get(entity_id) {
+                let previous_count = count.fetch_add(1, SeqCst);
+                debug_assert_ne!(previous_count, 0, "detected over-retain of an entity");
+            }
+        }
+    }
+
+    fn release(&self, entity_id: EntityId) {
+        if let Some(ref_counts) = self.ref_counts.upgrade() {
+            let ref_counts = ref_counts.upgradable_read();
+            let Some(count) = ref_counts.counts.get(entity_id) else {
+                return;
+            };
+            let previous_count = count.fetch_sub(1, SeqCst);
+            debug_assert_ne!(previous_count, 0, "detected over-release of an entity");
+            if previous_count == 1 {
+                let mut ref_counts = RwLockUpgradableReadGuard::upgrade(ref_counts);
+                ref_counts.dropped_entity_ids.push(entity_id);
+            }
+        }
+    }
+
+    fn is_upgradable(&self, entity_id: EntityId) -> bool {
+        self.ref_counts
+            .upgrade()
+            .map(|ref_counts| {
+                ref_counts
+                    .read()
+                    .counts
+                    .get(entity_id)
+                    .is_some_and(|count| count.load(SeqCst) > 0)
+            })
+            .unwrap_or(false)
+    }
+
+    fn upgrade(&self, entity_id: EntityId) -> bool {
+        let Some(ref_counts) = self.ref_counts.upgrade() else {
+            return false;
+        };
+        let ref_counts = ref_counts.read();
+        let Some(count) = ref_counts.counts.get(entity_id) else {
+            return false;
+        };
+        atomic_incr_if_not_zero(count) > 0
+    }
 }
 
 impl EntityMap {
@@ -1200,6 +1264,7 @@ impl fmt::Debug for BacktraceFormatter {
 #[cfg(test)]
 mod test {
     use crate::EntityMap;
+    use gpui_types::AppContextRuntime;
 
     struct TestEntity {
         pub i: i32,
@@ -1235,6 +1300,12 @@ mod test {
 
         let slot = entity_map.reserve::<TestEntity>();
         let handle = entity_map.insert(slot, TestEntity { i: 1 });
+        let shared_handle = gpui_types::Entity::from_parts(
+            handle.entity_id(),
+            <EntityMap as AppContextRuntime>::entity_runtime(&entity_map),
+        );
+        assert!(shared_handle.is_some());
+        drop(shared_handle);
         let weak = handle.downgrade();
         drop(handle);
 

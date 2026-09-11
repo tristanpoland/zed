@@ -80,6 +80,14 @@ pub mod private {
     pub use serde_json;
 }
 
+/// Backend-neutral public type definitions staged for the GPUI facade split.
+pub mod types {
+    pub use gpui_types::{
+        AnyEntity, AnyWeakEntity, App, AppContextRuntime, Context, Entity, EntityHandleRuntime,
+        EntityId, WeakEntity,
+    };
+}
+
 mod seal {
     /// A mechanism for restricting implementations of a trait to only those in GPUI.
     /// See: <https://predr.ag/blog/definitive-guide-to-sealed-traits-in-rust/>
