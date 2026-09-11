@@ -97,7 +97,7 @@ pub mod types {
         PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi, PlatformServicesSpi,
         PlatformSystemNotificationSpi, PlatformTextInputSpi, PlatformUrlSpi, PlatformWindowSpi,
         PlatformWindowingSpi, RequestFrameOptions, Role, StrongEntityHandle, SubscriptionHandle,
-        SystemNotification, SystemNotificationAction, SystemNotificationResponse, RuntimeSpi,
+        SystemNotification, SystemNotificationAction, SystemNotificationResponse, RuntimeSpi, Task,
         TaskHandle,
         TextInputAction, TextInputConfiguration, TextInputStateChange, Tree, TreeId, TreeUpdate,
         UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle, accessibility, clipboard,

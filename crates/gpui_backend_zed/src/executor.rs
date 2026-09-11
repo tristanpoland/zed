@@ -2,84 +2,25 @@ use crate::{ActivityGuard, App, PlatformDispatcher, PlatformScheduler};
 #[cfg(not(target_family = "wasm"))]
 use futures::channel::mpsc;
 use futures::prelude::*;
+use gpui_types::{BackgroundExecutorSpi, ForegroundExecutorSpi};
 use gpui_util::{TryFutureExt, TryFutureExtBacktrace};
 use scheduler::Instant;
 use scheduler::Scheduler;
 #[cfg(not(target_family = "wasm"))]
 use std::mem;
 use std::{
-    any::Any,
     future::Future,
     marker::PhantomData,
     pin::Pin,
     rc::Rc,
     sync::Arc,
-    task::{Context, Poll},
     time::Duration,
 };
-use gpui_types::{BackgroundExecutorSpi, ForegroundExecutorSpi};
 
 pub use scheduler::{
     DedicatedExecutor, FallibleTask, LocalExecutor as SchedulerLocalExecutor, Priority,
 };
-
-/// A task scheduled by a GPUI executor.
-#[must_use]
-pub struct Task<T>(scheduler::Task<T>);
-
-impl<T> Task<T> {
-    /// Creates a task that is ready with the given value.
-    pub fn ready(value: T) -> Self {
-        Self(scheduler::Task::ready(value))
-    }
-
-    /// Creates a task from an `async_task::Task`.
-    pub fn from_async_task(task: async_task::Task<T, scheduler::RunnableMeta>) -> Self {
-        Self(scheduler::Task::from_async_task(task))
-    }
-
-    /// Returns whether this task has completed.
-    pub fn is_ready(&self) -> bool {
-        self.0.is_ready()
-    }
-
-    /// Detaches this task so it runs independently of its handle.
-    pub fn detach(self) {
-        self.0.detach();
-    }
-
-    /// Converts this task into a fallible task that returns `Option<T>`.
-    pub fn fallible(self) -> FallibleTask<T> {
-        self.0.fallible()
-    }
-}
-
-impl<T> From<scheduler::Task<T>> for Task<T> {
-    fn from(task: scheduler::Task<T>) -> Self {
-        Self(task)
-    }
-}
-
-impl<T> std::fmt::Debug for Task<T> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
-
-impl<T: 'static> Future for Task<T> {
-    type Output = T;
-
-    fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
-        unsafe { self.map_unchecked_mut(|task| &mut task.0) }.poll(context)
-    }
-}
-
-impl Task<Box<dyn Any + Send + Sync>> {
-    /// Reinterprets the boxed output as a concrete `T` when the task completes.
-    pub fn downcast<T: Send + Sync + 'static>(self) -> Task<T> {
-        Task(self.0.downcast())
-    }
-}
+pub use gpui_types::Task;
 
 /// A pointer to the executor that is currently running,
 /// for spawning background tasks.

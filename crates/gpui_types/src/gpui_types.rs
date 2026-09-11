@@ -1818,6 +1818,7 @@ pub mod keyboard;
 pub mod keystroke;
 pub mod notifications;
 pub mod paths;
+pub mod task;
 pub mod urls;
 pub mod window;
 
@@ -1841,5 +1842,6 @@ pub use keystroke::*;
 pub use notifications::*;
 pub use paths::*;
 pub use platform::*;
+pub use task::*;
 pub use urls::PlatformUrlSpi;
 pub use window::*;

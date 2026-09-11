@@ -583,12 +583,6 @@ impl SubscriptionHandle for Subscription {
     }
 }
 
-impl<T> TaskHandle<T> for Task<T> {
-    fn detach(self) {
-        Task::detach(self)
-    }
-}
-
 const _: () = {
     const fn assert_app_context<T: AppContextSpi>() {}
     const fn assert_app_observe<T: AppContextObserve>() {}

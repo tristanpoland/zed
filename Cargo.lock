@@ -7798,8 +7798,10 @@ version = "0.2.2"
 dependencies = [
  "accesskit",
  "anyhow",
+ "async-task",
  "collections",
  "gpui_shared_string",
+ "scheduler",
  "schemars 1.0.4",
  "seahash",
  "serde",
@@ -16008,7 +16010,6 @@ dependencies = [
  "chrono",
  "flume 0.12.0",
  "futures 0.3.32",
- "gpui_types",
  "parking_lot",
  "rand 0.9.4",
  "wasm_thread",
