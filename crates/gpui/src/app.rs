@@ -1437,7 +1437,7 @@ impl App {
 
     /// Reads data from the platform clipboard.
     pub fn read_from_clipboard(&self) -> Option<ClipboardItem> {
-        self.platform.read_from_clipboard()
+        crate::PlatformClipboardSpi::read_from_clipboard(self.platform.as_ref())
     }
 
     /// Reads data from the platform clipboard, resolving once the contents
@@ -1465,7 +1465,12 @@ impl App {
 
     /// Writes data to the platform clipboard.
     pub fn write_to_clipboard(&self, item: ClipboardItem) {
-        self.platform.write_to_clipboard(item)
+        crate::PlatformClipboardSpi::write_to_clipboard(self.platform.as_ref(), item)
+    }
+
+    /// Clears the platform clipboard.
+    pub fn clear_clipboard(&self) {
+        crate::PlatformClipboardSpi::clear_clipboard(self.platform.as_ref())
     }
 
     /// Reads data from the primary selection buffer.

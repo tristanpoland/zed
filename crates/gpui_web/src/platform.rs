@@ -660,6 +660,12 @@ impl Platform for WebPlatform {
         }
     }
 
+    fn clear_clipboard(&self) {
+        if let Some(window) = web_sys::window() {
+            drop(window.navigator().clipboard().write_text(""));
+        }
+    }
+
     fn write_credentials(&self, _url: &str, _username: &str, _password: &[u8]) -> Task<Result<()>> {
         Task::ready(Err(anyhow::anyhow!(
             "credential storage is not available on the web"

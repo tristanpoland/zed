@@ -2,6 +2,7 @@ use crate::{
     Bounds, Capslock, Context, Empty, IntoElement, Keystroke, LongPressEvent, Modifiers, Pixels,
     Point, Render, TouchDragEvent, Window, point, seal::Sealed,
 };
+pub use gpui_types::ExternalPaths;
 use smallvec::SmallVec;
 use std::{any::Any, fmt::Debug, ops::Deref, path::PathBuf};
 
@@ -686,17 +687,6 @@ impl Deref for MouseExitEvent {
 
     fn deref(&self) -> &Self::Target {
         &self.modifiers
-    }
-}
-
-/// A collection of paths from the platform, such as from a file drop.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
-pub struct ExternalPaths(pub SmallVec<[PathBuf; 2]>);
-
-impl ExternalPaths {
-    /// Convert this collection of paths into a slice.
-    pub fn paths(&self) -> &[PathBuf] {
-        &self.0
     }
 }
 

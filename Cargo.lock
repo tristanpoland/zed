@@ -7802,8 +7802,12 @@ name = "gpui_types"
 version = "0.2.2"
 dependencies = [
  "schemars 1.0.4",
+ "seahash",
  "serde",
+ "serde_json",
  "slotmap",
+ "smallvec",
+ "strum 0.28.0",
 ]
 
 [[package]]
