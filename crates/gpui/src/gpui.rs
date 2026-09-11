@@ -90,7 +90,8 @@ pub mod types {
         SubscriptionHandle, TaskHandle, VisualContextSpi, WeakEntity, WeakEntityHandle, clipboard,
         platform::{
             CursorStyle, PlatformCredentialsSpi, PlatformCursorSpi, PlatformSystemNotificationSpi,
-            SystemNotification, SystemNotificationAction, SystemNotificationResponse,
+            PlatformUrlSpi, SystemNotification, SystemNotificationAction,
+            SystemNotificationResponse,
         },
     };
 }

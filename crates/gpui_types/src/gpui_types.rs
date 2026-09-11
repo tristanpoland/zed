@@ -420,6 +420,7 @@ pub mod platform {
         PlatformSystemNotificationSpi, SystemNotification, SystemNotificationAction,
         SystemNotificationResponse,
     };
+    pub use crate::urls::PlatformUrlSpi;
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
     use std::fmt;
@@ -549,6 +550,7 @@ pub mod context;
 pub mod credentials;
 pub mod entity;
 pub mod notifications;
+pub mod urls;
 
 pub use clipboard::*;
 pub use color::*;
@@ -559,3 +561,4 @@ pub use geometry::*;
 pub use input::*;
 pub use notifications::*;
 pub use platform::*;
+pub use urls::PlatformUrlSpi;

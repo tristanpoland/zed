@@ -81,6 +81,7 @@ pub use gpui_types::platform::{
     CursorStyle, PlatformCredentialsSpi, PlatformCursorSpi, PlatformSystemNotificationSpi,
     SystemNotification, SystemNotificationAction, SystemNotificationResponse,
 };
+pub use gpui_types::urls::PlatformUrlSpi;
 /// A clipboard entry using GPUI's runtime image type.
 pub type ClipboardEntry = SharedClipboardEntry<Image>;
 /// A clipboard item using GPUI's runtime image type.
@@ -457,6 +458,23 @@ impl PlatformSystemNotificationSpi for dyn Platform {
         callback: Box<dyn FnMut(SystemNotificationResponse)>,
     ) {
         Platform::on_system_notification_response(self, callback);
+    }
+}
+
+impl PlatformUrlSpi for dyn Platform {
+    type Task<T> = Task<T>;
+    type Error = anyhow::Error;
+
+    fn open_url(&self, url: &str) {
+        Platform::open_url(self, url);
+    }
+
+    fn on_open_urls(&self, callback: Box<dyn FnMut(Vec<String>)>) {
+        Platform::on_open_urls(self, callback);
+    }
+
+    fn register_url_scheme(&self, url: &str) -> Self::Task<Result<(), Self::Error>> {
+        Platform::register_url_scheme(self, url)
     }
 }
 

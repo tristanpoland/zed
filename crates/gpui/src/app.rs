@@ -292,7 +292,7 @@ impl Application {
     where
         F: 'static + FnMut(Vec<String>),
     {
-        self.0.borrow().platform.on_open_urls(Box::new(callback));
+        crate::PlatformUrlSpi::on_open_urls(self.0.borrow().platform.as_ref(), Box::new(callback));
         self
     }
 
@@ -1534,7 +1534,7 @@ impl App {
 
     /// Directs the platform's default browser to open the given URL.
     pub fn open_url(&self, url: &str) {
-        self.platform.open_url(url);
+        crate::PlatformUrlSpi::open_url(self.platform.as_ref(), url);
     }
 
     /// Registers the given URL scheme (e.g. `zed` for `zed://` urls) to be
@@ -1544,7 +1544,7 @@ impl App {
     /// as part of app distribution, but this method exists to let you register
     /// schemes at runtime.
     pub fn register_url_scheme(&self, scheme: &str) -> Task<Result<()>> {
-        self.platform.register_url_scheme(scheme)
+        crate::PlatformUrlSpi::register_url_scheme(self.platform.as_ref(), scheme)
     }
 
     /// Sets the application's process-wide identity and user-visible name.
