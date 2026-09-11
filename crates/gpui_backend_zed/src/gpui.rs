@@ -85,7 +85,8 @@ pub mod private {
 pub mod types {
     pub use gpui_types::{
         A11yCallbacks, AccessibleAction, ActionData, ActionRequest, AnyEntity, AnyWeakEntity, App,
-        AppContextObserve, AppContextRead, AppContextRuntime, AppContextSpawn, AppContextSpi,
+        AppContextCore, AppContextObserve, AppContextRead, AppContextRuntime, AppContextSpawn,
+        AppContextSpi,
         AppContextUpdate, AppContextWindow, AppLifecyclePhase, AsKeystroke, Autocapitalize,
         BackendSpi, BackgroundExecutorSpi,
         Context, ContextListener, ContextObserve, ContextSpawn, ContextSpi, CursorStyle,

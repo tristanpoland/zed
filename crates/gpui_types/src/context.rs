@@ -314,6 +314,64 @@ pub trait ContextSpi {
     fn weak_entity(&self) -> Self::WeakEntity;
 }
 
+/// The backend-neutral core of an application context.
+///
+/// This is the largest context family that can cross the API boundary without
+/// naming GPUI's window, view, or mutable-borrow types. Window operations stay
+/// in [`AppContextWindow`] until those identities are shared as well.
+pub trait AppContextCore {
+    /// The strong entity handle family returned by this context.
+    type Entity<T>;
+    /// The reservation family returned by this context.
+    type Reservation<T>;
+    /// The entity context family supplied to callbacks.
+    type Context<'a, T>
+    where
+        Self: 'a;
+    /// The application context passed to read callbacks.
+    type App;
+    /// The task handle family returned by background work.
+    type Task<T>: TaskHandle<T>;
+
+    /// Creates an entity owned by this application context.
+    fn new<T: 'static>(
+        &mut self,
+        build_entity: impl FnOnce(&mut Self::Context<'_, T>) -> T,
+    ) -> Self::Entity<T>;
+
+    /// Reserves an entity slot for later insertion.
+    fn reserve_entity<T: 'static>(&mut self) -> Self::Reservation<T>;
+
+    /// Inserts an entity into a previously reserved slot.
+    fn insert_entity<T: 'static>(
+        &mut self,
+        reservation: Self::Reservation<T>,
+        build_entity: impl FnOnce(&mut Self::Context<'_, T>) -> T,
+    ) -> Self::Entity<T>;
+
+    /// Updates an entity through this application context.
+    fn update_entity<T: 'static, R>(
+        &mut self,
+        entity: &Self::Entity<T>,
+        update: impl FnOnce(&mut T, &mut Self::Context<'_, T>) -> R,
+    ) -> R;
+
+    /// Reads an entity through this application context.
+    fn read_entity<T: 'static, R>(
+        &self,
+        entity: &Self::Entity<T>,
+        read: impl FnOnce(&T, &Self::App) -> R,
+    ) -> R;
+
+    /// Spawns a future on this context's background executor.
+    fn background_spawn<R>(
+        &self,
+        future: impl Future<Output = R> + Send + 'static,
+    ) -> Self::Task<R>
+    where
+        R: Send + 'static;
+}
+
 /// A backend-neutral application context.
 pub struct App {
     runtime: Rc<dyn AppContextRuntime>,

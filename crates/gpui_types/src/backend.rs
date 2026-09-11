@@ -1,6 +1,7 @@
 use crate::{
-    AppContextObserve, AppContextRead, AppContextRuntime, AppContextSpawn, AppContextSpi,
-    AppContextUpdate, AppContextWindow, EntityStorageSpi, PlatformServicesSpi, TaskHandle,
+    AppContextCore, AppContextObserve, AppContextRead, AppContextRuntime, AppContextSpawn,
+    AppContextSpi, AppContextUpdate, AppContextWindow, EntityStorageSpi, PlatformServicesSpi,
+    TaskHandle,
 };
 use std::{future::Future, sync::Arc, time::Duration};
 
@@ -137,7 +138,8 @@ pub trait BackendSpi: 'static {
     type Scheduling: RuntimeSpi;
 
     /// The context implementation owned by the backend.
-    type Context: AppContextSpi
+    type Context: AppContextCore
+        + AppContextSpi
         + AppContextRead
         + AppContextUpdate
         + AppContextObserve

@@ -11,14 +11,12 @@
 //! by the implementation modules and by `view.rs`, `window.rs`,
 //! `executor.rs`, and `platform/app_menu.rs`.
 //!
-//! Moving the implementation to a separate backend while retaining these
-//! signatures would require `gpui` to name that backend's concrete types. That
-//! would add a backend dependency here or require a wholesale re-export.
-//! Replacing the types with trait objects or opaque handles would change
-//! constructors, callback ergonomics, and type identity. The real
-//! implementation therefore remains here as the documented symbol blocker,
-//! while the backend copy implements the same backend-neutral SPI in
-//! `gpui_types`.
+//! The backend-neutral entity-context core is exposed through
+//! [`gpui_types::AppContextCore`] and implemented by the production context
+//! family in both GPUI runtimes. The remaining public signatures still couple
+//! the full application identity to [`Window`], view types, and mutable-borrow
+//! helpers. Moving that layer without naming a backend would either require
+//! sharing those identities too or change constructors and callback ergonomics.
 
 use scheduler::Instant;
 use std::{
