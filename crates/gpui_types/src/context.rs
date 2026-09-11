@@ -1,4 +1,7 @@
-use super::entity::{Entity, EntityHandleRuntime, WeakEntity};
+use super::{
+    EntityHandle, EntityId, SubscriptionHandle, TaskHandle,
+    entity::{Entity, EntityHandleRuntime, WeakEntity},
+};
 use std::{
     ops::{Deref, DerefMut},
     rc::Rc,
@@ -9,6 +12,109 @@ use std::{
 pub trait AppContextRuntime: 'static {
     /// Returns the handle-lifetime capability for this application.
     fn entity_runtime(&self) -> Rc<dyn EntityHandleRuntime>;
+}
+
+/// The read operations supplied by an application context implementation.
+///
+/// The associated entity family lets each backend retain its concrete entity
+/// handle type while sharing the operation contract.
+pub trait AppContextRead {
+    /// The entity handle family used by this application context.
+    type Entity<T>;
+    /// The application context passed to read callbacks.
+    type App;
+
+    /// Reads an entity through the application context.
+    fn read_entity<T, R>(
+        &self,
+        entity: &Self::Entity<T>,
+        read: impl FnOnce(&T, &Self::App) -> R,
+    ) -> R
+    where
+        T: 'static;
+}
+
+/// The update operations supplied by an application context implementation.
+pub trait AppContextUpdate: AppContextRead {
+    /// The context family supplied while updating an entity.
+    type Context<'a, T>
+    where
+        Self: 'a;
+
+    /// Updates an entity through the application context.
+    fn update_entity<T, R>(
+        &mut self,
+        entity: &Self::Entity<T>,
+        update: impl FnOnce(&mut T, &mut Self::Context<'_, T>) -> R,
+    ) -> R
+    where
+        T: 'static;
+}
+
+/// The observation operations supplied by an entity context implementation.
+pub trait ContextObserve<T> {
+    /// The entity handle family used by this context.
+    type Entity<U>;
+    /// The subscription handle returned by this context.
+    type Subscription: SubscriptionHandle;
+
+    /// Observes notifications from another entity.
+    fn observe<W>(
+        &mut self,
+        entity: &Self::Entity<W>,
+        on_notify: impl FnMut(&mut T, Self::Entity<W>) + 'static,
+    ) -> Self::Subscription
+    where
+        T: 'static,
+        W: 'static;
+}
+
+/// The foreground spawn operation supplied by an application context.
+pub trait AppContextSpawn {
+    /// The asynchronous application context supplied to spawned callbacks.
+    type AsyncContext;
+    /// The task handle returned by this context.
+    type Task<T>: TaskHandle<T>;
+
+    /// Spawns a future on the foreground executor.
+    fn spawn<AsyncFn, R>(&self, callback: AsyncFn) -> Self::Task<R>
+    where
+        AsyncFn: AsyncFnOnce(&mut Self::AsyncContext) -> R + 'static,
+        R: 'static;
+}
+
+/// The foreground spawn operation supplied by an entity context.
+pub trait ContextSpawn<T> {
+    /// The weak handle supplied to spawned callbacks.
+    type WeakEntity: super::WeakEntityHandle<T>;
+    /// The asynchronous application context supplied to spawned callbacks.
+    type AsyncContext;
+    /// The task handle returned by this context.
+    type Task<R>: TaskHandle<R>;
+
+    /// Spawns a future associated with this entity.
+    fn spawn<AsyncFn, R>(&self, callback: AsyncFn) -> Self::Task<R>
+    where
+        AsyncFn: AsyncFnOnce(Self::WeakEntity, &mut Self::AsyncContext) -> R + 'static,
+        R: 'static;
+}
+
+/// The entity operations supplied by an application context.
+pub trait ContextSpi {
+    /// The strong handle type returned by [`Self::entity`].
+    type Entity: EntityHandle;
+
+    /// The weak handle type returned by [`Self::weak_entity`].
+    type WeakEntity: EntityHandle;
+
+    /// Returns the identifier of the entity associated with this context.
+    fn entity_id(&self) -> EntityId;
+
+    /// Attempts to obtain a strong handle for the entity associated with this context.
+    fn entity(&self) -> Option<Self::Entity>;
+
+    /// Returns a weak handle for the entity associated with this context.
+    fn weak_entity(&self) -> Self::WeakEntity;
 }
 
 /// A backend-neutral application context.
@@ -81,5 +187,22 @@ impl<T> Context<'_, T> {
     /// Returns a weak handle for the entity backing this context.
     pub fn weak_entity(&self) -> WeakEntity<T> {
         WeakEntity::clone(&self.entity_state)
+    }
+}
+
+impl<T: 'static> ContextSpi for Context<'_, T> {
+    type Entity = Entity<T>;
+    type WeakEntity = WeakEntity<T>;
+
+    fn entity_id(&self) -> EntityId {
+        self.entity_id()
+    }
+
+    fn entity(&self) -> Option<Self::Entity> {
+        self.entity()
+    }
+
+    fn weak_entity(&self) -> Self::WeakEntity {
+        self.weak_entity()
     }
 }

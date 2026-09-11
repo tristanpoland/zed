@@ -58,10 +58,25 @@ pub trait AppContextSpi {
     /// Returns the entity-storage capability for this application context.
     fn entity_storage(&self) -> &dyn EntityStorageSpi;
 
+    /// Returns the concrete type stored for an entity, if it exists.
+    fn entity_type(&self, entity_id: EntityId) -> Option<TypeId> {
+        self.entity_storage().entity_type(entity_id)
+    }
+
     /// Returns whether an entity with the given identifier is currently stored
     /// in this application context.
     fn entity_exists(&self, entity_id: EntityId) -> bool {
         self.entity_storage().contains(entity_id)
+    }
+
+    /// Reserves an entity identifier and its handle lifetime for a later insertion.
+    fn reserve_entity(&self) -> EntityReservation {
+        self.entity_storage().reserve()
+    }
+
+    /// Reads type-erased state for an entity operation.
+    fn read_entity(&self, entity_id: EntityId) -> Option<&dyn Any> {
+        self.entity_storage().read(entity_id)
     }
 }
 
