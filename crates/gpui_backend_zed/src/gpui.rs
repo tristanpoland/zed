@@ -90,14 +90,14 @@ pub mod types {
         EntityHandle, EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi,
         InvalidKeystrokeError, KeybindingKeystroke, Keystroke, Node, NodeId, Orientation,
         PathPromptOptions, PlatformAccessibilitySpi, PlatformApplicationSpi,
-        PlatformCredentialsSpi, PlatformCursorSpi, PlatformKeyboardLayoutSpi,
+        PlatformCredentialsSpi, PlatformCursorSpi, PlatformDisplaySpi, PlatformKeyboardLayoutSpi,
         PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi, PlatformServicesSpi,
-        PlatformSystemNotificationSpi, PlatformTextInputSpi, PlatformUrlSpi, Role,
-        StrongEntityHandle, SubscriptionHandle, SystemNotification, SystemNotificationAction,
-        SystemNotificationResponse, TaskHandle, TextInputAction, TextInputConfiguration,
-        TextInputStateChange, Tree, TreeId, TreeUpdate, UTF16Selection, VisualContextSpi,
-        WeakEntity, WeakEntityHandle, accessibility, clipboard, color, geometry, input,
-        input_method, keyboard, keystroke, platform, window,
+        PlatformSystemNotificationSpi, PlatformTextInputSpi, PlatformUrlSpi, PlatformWindowSpi,
+        PlatformWindowingSpi, RequestFrameOptions, Role, StrongEntityHandle, SubscriptionHandle,
+        SystemNotification, SystemNotificationAction, SystemNotificationResponse, TaskHandle,
+        TextInputAction, TextInputConfiguration, TextInputStateChange, Tree, TreeId, TreeUpdate,
+        UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle, accessibility, clipboard,
+        color, geometry, input, input_method, keyboard, keystroke, platform, window,
     };
 }
 

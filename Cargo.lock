@@ -7812,6 +7812,7 @@ dependencies = [
  "slotmap",
  "smallvec",
  "strum 0.28.0",
+ "uuid",
 ]
 
 [[package]]

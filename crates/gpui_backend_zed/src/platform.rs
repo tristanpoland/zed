@@ -92,7 +92,8 @@ pub use gpui_types::platform::{
 };
 pub use gpui_types::urls::PlatformUrlSpi;
 pub use gpui_types::window::{
-    MAX_BUTTONS_PER_SIDE, WindowAppearance, WindowBackgroundAppearance, WindowButton,
+    MAX_BUTTONS_PER_SIDE, PlatformDisplaySpi, PlatformWindowSpi, PlatformWindowingSpi,
+    RequestFrameOptions, WindowAppearance, WindowBackgroundAppearance, WindowButton,
     WindowButtonLayout, WindowDecorations,
 };
 pub use keyboard::{
@@ -406,6 +407,30 @@ pub trait Platform: 'static {
     fn on_keyboard_layout_change(&self, callback: Box<dyn FnMut()>);
 }
 
+impl PlatformWindowingSpi for dyn Platform {
+    type Display = dyn PlatformDisplay;
+
+    fn displays(&self) -> Vec<Rc<Self::Display>> {
+        Platform::displays(self)
+    }
+
+    fn primary_display(&self) -> Option<Rc<Self::Display>> {
+        Platform::primary_display(self)
+    }
+
+    fn window_appearance(&self) -> WindowAppearance {
+        Platform::window_appearance(self)
+    }
+
+    fn set_window_appearance(&self, appearance: Option<WindowAppearance>) {
+        Platform::set_window_appearance(self, appearance)
+    }
+
+    fn button_layout(&self) -> Option<WindowButtonLayout> {
+        Platform::button_layout(self)
+    }
+}
+
 impl PlatformKeyboardSpi for dyn Platform {
     fn keyboard_layout(&self) -> Box<dyn gpui_types::keyboard::PlatformKeyboardLayoutSpi> {
         Platform::keyboard_layout(self)
@@ -687,6 +712,56 @@ pub trait PlatformDisplay: Debug {
     }
 }
 
+impl PlatformDisplaySpi for dyn PlatformDisplay {
+    fn id(&self) -> DisplayId {
+        PlatformDisplay::id(self)
+    }
+
+    fn uuid(&self) -> anyhow::Result<Uuid> {
+        PlatformDisplay::uuid(self)
+    }
+
+    fn bounds(&self) -> gpui_types::Bounds<Pixels> {
+        to_shared_bounds(PlatformDisplay::bounds(self))
+    }
+
+    fn visible_bounds(&self) -> gpui_types::Bounds<Pixels> {
+        to_shared_bounds(PlatformDisplay::visible_bounds(self))
+    }
+
+    fn default_bounds(&self) -> gpui_types::Bounds<Pixels> {
+        to_shared_bounds(PlatformDisplay::default_bounds(self))
+    }
+}
+
+fn to_shared_point(point: Point<Pixels>) -> gpui_types::Point<Pixels> {
+    gpui_types::Point {
+        x: point.x,
+        y: point.y,
+    }
+}
+
+fn to_shared_size(size: Size<Pixels>) -> gpui_types::Size<Pixels> {
+    gpui_types::Size {
+        width: size.width,
+        height: size.height,
+    }
+}
+
+fn to_shared_bounds(bounds: Bounds<Pixels>) -> gpui_types::Bounds<Pixels> {
+    gpui_types::Bounds {
+        origin: to_shared_point(bounds.origin),
+        size: to_shared_size(bounds.size),
+    }
+}
+
+fn to_runtime_size(size: gpui_types::Size<Pixels>) -> Size<Pixels> {
+    Size {
+        width: size.width,
+        height: size.height,
+    }
+}
+
 /// Thermal state of the system
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThermalState {
@@ -827,31 +902,12 @@ impl Tiling {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
-#[expect(missing_docs)]
-pub struct RequestFrameOptions {
-    /// Whether a presentation is required.
-    pub require_presentation: bool,
-    /// Force refresh of all rendering states when true.
-    pub force_render: bool,
-}
-
 /// Regions of a window that are obscured or reserved by the system.
-///
-/// Mobile applications often share space in their window with system-specific
-/// geometry, from keyboards to camera notches. In GPUI, all this is abstracted
-/// into a single "inset" which should be overlaid on the window's bounds.
-/// It is up to the application develop to determine how to handle these cases.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct WindowInsets {
-    /// Regions covered by system UI or hardware: status bar, display
-    /// cutouts/notch, home indicator, navigation bars.
-    /// (iOS: `safeAreaInsets`. Android: `WindowInsets` of types
-    /// `systemBars() | displayCutout()`.)
+    /// Regions covered by system UI or hardware.
     pub safe_area: Edges<Pixels>,
     /// The region covered by the keyboard, when present.
-    /// (iOS: derived from `keyboardWillShow`/frame-change notifications.
-    /// Android: `WindowInsets.Type.ime()`.)
     pub ime: Edges<Pixels>,
 }
 
@@ -1055,6 +1111,169 @@ pub trait PlatformWindow:
     #[cfg(any(test, feature = "test-support"))]
     fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
         anyhow::bail!("render_to_image not implemented for this platform")
+    }
+}
+
+impl PlatformWindowSpi for dyn PlatformWindow {
+    type Display = dyn PlatformDisplay;
+
+    fn bounds(&self) -> gpui_types::Bounds<Pixels> {
+        to_shared_bounds(PlatformWindow::bounds(self))
+    }
+
+    fn is_maximized(&self) -> bool {
+        PlatformWindow::is_maximized(self)
+    }
+
+    fn content_size(&self) -> gpui_types::Size<Pixels> {
+        to_shared_size(PlatformWindow::content_size(self))
+    }
+
+    fn visual_viewport_bounds(&self) -> gpui_types::Bounds<Pixels> {
+        to_shared_bounds(PlatformWindow::visual_viewport_bounds(self))
+    }
+
+    fn on_visual_viewport_changed(&self, callback: Box<dyn FnMut()>) {
+        PlatformWindow::on_visual_viewport_changed(self, callback)
+    }
+
+    fn prepare_frame(&self) -> bool {
+        PlatformWindow::prepare_frame(self)
+    }
+
+    fn resize(&mut self, size: gpui_types::Size<Pixels>) {
+        PlatformWindow::resize(self, to_runtime_size(size))
+    }
+
+    fn scale_factor(&self) -> f32 {
+        PlatformWindow::scale_factor(self)
+    }
+
+    fn appearance(&self) -> WindowAppearance {
+        PlatformWindow::appearance(self)
+    }
+
+    fn display(&self) -> Option<Rc<Self::Display>> {
+        PlatformWindow::display(self)
+    }
+
+    fn mouse_position(&self) -> gpui_types::Point<Pixels> {
+        to_shared_point(PlatformWindow::mouse_position(self))
+    }
+
+    fn modifiers(&self) -> Modifiers {
+        PlatformWindow::modifiers(self)
+    }
+
+    fn capslock(&self) -> Capslock {
+        PlatformWindow::capslock(self)
+    }
+
+    fn activate(&self) {
+        PlatformWindow::activate(self)
+    }
+
+    fn request_attention(&self) {
+        PlatformWindow::request_attention(self)
+    }
+
+    fn is_active(&self) -> bool {
+        PlatformWindow::is_active(self)
+    }
+
+    fn is_hovered(&self) -> bool {
+        PlatformWindow::is_hovered(self)
+    }
+
+    fn background_appearance(&self) -> WindowBackgroundAppearance {
+        PlatformWindow::background_appearance(self)
+    }
+
+    fn set_title(&mut self, title: &str) {
+        PlatformWindow::set_title(self, title)
+    }
+
+    fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance) {
+        PlatformWindow::set_background_appearance(self, background_appearance)
+    }
+
+    fn minimize(&self) {
+        PlatformWindow::minimize(self)
+    }
+
+    fn zoom(&self) {
+        PlatformWindow::zoom(self)
+    }
+
+    fn toggle_fullscreen(&self) {
+        PlatformWindow::toggle_fullscreen(self)
+    }
+
+    fn is_fullscreen(&self) -> bool {
+        PlatformWindow::is_fullscreen(self)
+    }
+
+    fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
+        PlatformWindow::frame_waker(self)
+    }
+
+    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
+        PlatformWindow::on_request_frame(self, callback)
+    }
+
+    fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {
+        PlatformWindow::on_active_status_change(self, callback)
+    }
+
+    fn on_hover_status_change(&self, callback: Box<dyn FnMut(bool)>) {
+        PlatformWindow::on_hover_status_change(self, callback)
+    }
+
+    fn on_resize(&self, mut callback: Box<dyn FnMut(gpui_types::Size<Pixels>, f32)>) {
+        PlatformWindow::on_resize(
+            self,
+            Box::new(move |size, scale_factor| callback(to_shared_size(size), scale_factor)),
+        )
+    }
+
+    fn on_moved(&self, callback: Box<dyn FnMut()>) {
+        PlatformWindow::on_moved(self, callback)
+    }
+
+    fn on_should_close(&self, callback: Box<dyn FnMut() -> bool>) {
+        PlatformWindow::on_should_close(self, callback)
+    }
+
+    fn on_close(&self, callback: Box<dyn FnOnce()>) {
+        PlatformWindow::on_close(self, callback)
+    }
+
+    fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
+        PlatformWindow::on_appearance_changed(self, callback)
+    }
+
+    fn on_button_layout_changed(&self, callback: Box<dyn FnMut()>) {
+        PlatformWindow::on_button_layout_changed(self, callback)
+    }
+
+    fn schedule_frame(&self) {
+        PlatformWindow::schedule_frame(self)
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        PlatformWindow::is_subpixel_rendering_supported(self)
+    }
+
+    fn show_soft_keyboard(&self) {
+        PlatformWindow::show_soft_keyboard(self)
+    }
+
+    fn hide_soft_keyboard(&self) {
+        PlatformWindow::hide_soft_keyboard(self)
+    }
+
+    fn play_system_bell(&self) {
+        PlatformWindow::play_system_bell(self)
     }
 }
 
