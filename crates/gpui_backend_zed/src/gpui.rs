@@ -91,7 +91,7 @@ pub mod types {
         Context, ContextListener, ContextObserve, ContextSpawn, ContextSpi, CursorStyle,
         DispatcherSpi, Entity,
         EntityHandle, EntityHandleRuntime, EntityId, EntityReservation, EntityStorageSpi,
-        InvalidKeystrokeError, KeybindingKeystroke, Keystroke, Node, NodeId, Orientation,
+        InvalidKeystrokeError, KeybindingKeystroke, Keystroke, LayoutId, Node, NodeId, Orientation,
         PathPromptOptions, PlatformAccessibilitySpi, PlatformApplicationSpi,
         PlatformCredentialsSpi, PlatformCursorSpi, PlatformDisplaySpi, PlatformKeyboardLayoutSpi,
         PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi, PlatformServicesSpi,
@@ -102,7 +102,8 @@ pub mod types {
         TextInputAction, TextInputConfiguration, TextInputStateChange, Tree, TreeId, TreeUpdate,
         UTF16Selection, VisualContextSpi, WeakEntity, WeakEntityHandle, WindowHandle, WindowId,
         WindowRootReadSpi, accessibility, clipboard,
-        color, geometry, input, input_method, keyboard, keystroke, platform, rendering, window,
+        color, geometry, input, input_method, keyboard, keystroke, layout, platform, rendering,
+        window,
     };
 }
 
@@ -143,7 +144,7 @@ pub use gpui_macros::{
 };
 pub use gpui_types::{
     BackgroundExecutorSpi, BorderStyle, DispatcherSpi, DrawOrder, ForegroundExecutorSpi,
-    PaddedBool32, RuntimeSpi,
+    LayoutId, PaddedBool32, RuntimeSpi,
 };
 pub use gpui_types::accessibility::{
     A11yCallbacks, AccessibleAction, ActionData, ActionRequest, Node, NodeId, Orientation,
@@ -198,8 +199,7 @@ pub use styled::*;
 pub use gpui_types::{SubscriberSet, Subscription};
 pub use svg_renderer::*;
 pub(crate) use tab_stop::*;
-use taffy::TaffyLayoutEngine;
-pub use taffy::{AvailableSpace, LayoutId};
+pub use taffy::AvailableSpace;
 #[cfg(any(test, feature = "test-support"))]
 pub use test::*;
 pub use text_system::*;

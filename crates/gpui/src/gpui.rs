@@ -90,7 +90,7 @@ pub mod types {
         ContextListener, ContextObserve, ContextSpawn, ContextSpi,
         DispatcherSpi, Entity, EntityHandle, EntityHandleRuntime,
         EntityId, EntityReservation, EntityStorageSpi, InvalidKeystrokeError, KeybindingKeystroke,
-        Keystroke, Node, NodeId, Orientation, PathPromptOptions, PlatformAccessibilitySpi,
+        Keystroke, LayoutId, Node, NodeId, Orientation, PathPromptOptions, PlatformAccessibilitySpi,
         PlatformDisplaySpi, PlatformKeyboardLayoutSpi, PlatformKeyboardMapperSpi,
         PlatformKeyboardSpi, PlatformPathSpi, PlatformServicesSpi, PlatformTextInputSpi,
         PlatformWindowSpi, PlatformWindowingSpi, RequestFrameOptions, Role, StrongEntityHandle,
@@ -107,7 +107,7 @@ pub mod types {
             PlatformUrlSpi, SystemNotification, SystemNotificationAction,
             SystemNotificationResponse,
         },
-        rendering, window,
+        layout, rendering, window,
     };
 }
 
@@ -147,7 +147,7 @@ pub use gpui_macros::{
 };
 pub use gpui_types::{
     BackendSpi, BackgroundExecutorSpi, BorderStyle, DispatcherSpi, DrawOrder, ForegroundExecutorSpi,
-    PaddedBool32, RuntimeSpi,
+    LayoutId, PaddedBool32, RuntimeSpi,
 };
 pub use gpui_types::accessibility::{
     A11yCallbacks, AccessibleAction, ActionData, ActionRequest, Node, NodeId, Orientation,
@@ -203,7 +203,7 @@ pub use gpui_types::{SubscriberSet, Subscription};
 pub use svg_renderer::*;
 pub(crate) use tab_stop::*;
 use taffy::TaffyLayoutEngine;
-pub use taffy::{AvailableSpace, LayoutId};
+pub use taffy::AvailableSpace;
 #[cfg(any(test, feature = "test-support"))]
 pub use test::*;
 pub use text_system::*;

@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use collections::{FxHashMap, FxHashSet};
+use gpui_types::LayoutId;
 use std::{fmt::Debug, ops::Range};
 use taffy::{
     TaffyTree, TraversePartialTree as _,
@@ -38,6 +39,16 @@ pub struct TaffyLayoutEngine {
 }
 
 const EXPECT_MESSAGE: &str = "we should avoid taffy layout errors by construction if possible";
+
+trait IntoLayoutId {
+    fn into_layout_id(self) -> LayoutId;
+}
+
+impl IntoLayoutId for NodeId {
+    fn into_layout_id(self) -> LayoutId {
+        LayoutId::from(u64::from(self))
+    }
+}
 
 impl TaffyLayoutEngine {
     pub fn new() -> Self {
@@ -72,13 +83,18 @@ impl TaffyLayoutEngine {
             self.taffy
                 .new_leaf(taffy_style)
                 .expect(EXPECT_MESSAGE)
-                .into()
+                .into_layout_id()
         } else {
             self.taffy
-                // This is safe because LayoutId is repr(transparent) to taffy::tree::NodeId.
-                .new_with_children(taffy_style, LayoutId::to_taffy_slice(children))
+                .new_with_children(
+                    taffy_style,
+                    &children
+                        .iter()
+                        .map(|child| NodeId::from(child.as_u64()))
+                        .collect::<Vec<_>>(),
+                )
                 .expect(EXPECT_MESSAGE)
-                .into()
+                .into_layout_id()
         }
     }
 
@@ -103,7 +119,7 @@ impl TaffyLayoutEngine {
         self.taffy
             .new_leaf_with_context(taffy_style, NodeContext { measure })
             .expect(EXPECT_MESSAGE)
-            .into()
+            .into_layout_id()
     }
 
     /// Treats any `auto` dimension of the given node's style as filling `size`.
@@ -118,7 +134,10 @@ impl TaffyLayoutEngine {
         size: Size<Pixels>,
         scale_factor: f32,
     ) {
-        let style = self.taffy.style(id.0).expect(EXPECT_MESSAGE);
+        let style = self
+            .taffy
+            .style(NodeId::from(id.as_u64()))
+            .expect(EXPECT_MESSAGE);
         let stretch_width = style.size.width.is_auto();
         let stretch_height = style.size.height.is_auto();
         if !stretch_width && !stretch_height {
@@ -133,7 +152,9 @@ impl TaffyLayoutEngine {
             style.size.height =
                 taffy::style::Dimension::length(round_to_device_pixel(size.height.0, scale_factor));
         }
-        self.taffy.set_style(id.0, style).expect(EXPECT_MESSAGE);
+        self.taffy
+            .set_style(NodeId::from(id.as_u64()), style)
+            .expect(EXPECT_MESSAGE);
     }
 
     // Used to understand performance
@@ -141,12 +162,12 @@ impl TaffyLayoutEngine {
     fn count_all_children(&self, parent: LayoutId) -> anyhow::Result<u32> {
         let mut count = 0;
 
-        for child in self.taffy.children(parent.0)? {
+        for child in self.taffy.children(NodeId::from(parent.as_u64()))? {
             // Count this child.
             count += 1;
 
             // Count all of this child's children.
-            count += self.count_all_children(LayoutId(child))?
+            count += self.count_all_children(LayoutId::from(u64::from(child)))?
         }
 
         Ok(count)
@@ -157,13 +178,16 @@ impl TaffyLayoutEngine {
     fn max_depth(&self, depth: u32, parent: LayoutId) -> anyhow::Result<u32> {
         println!(
             "{parent:?} at depth {depth} has {} children",
-            self.taffy.child_count(parent.0)
+            self.taffy.child_count(NodeId::from(parent.as_u64()))
         );
 
         let mut max_child_depth = 0;
 
-        for child in self.taffy.children(parent.0)? {
-            max_child_depth = std::cmp::max(max_child_depth, self.max_depth(0, LayoutId(child))?);
+        for child in self.taffy.children(NodeId::from(parent.as_u64()))? {
+            max_child_depth = std::cmp::max(
+                max_child_depth,
+                self.max_depth(0, LayoutId::from(u64::from(child)))?,
+            );
         }
 
         Ok(depth + 1 + max_child_depth)
@@ -174,10 +198,10 @@ impl TaffyLayoutEngine {
     fn get_edges(&self, parent: LayoutId) -> anyhow::Result<Vec<(LayoutId, LayoutId)>> {
         let mut edges = Vec::new();
 
-        for child in self.taffy.children(parent.0)? {
-            edges.push((parent, LayoutId(child)));
+        for child in self.taffy.children(NodeId::from(parent.as_u64()))? {
+            edges.push((parent, LayoutId::from(u64::from(child))));
 
-            edges.extend(self.get_edges(LayoutId(child))?);
+            edges.extend(self.get_edges(LayoutId::from(u64::from(child)))?);
         }
 
         Ok(edges)
@@ -210,10 +234,10 @@ impl TaffyLayoutEngine {
                 self.absolute_outer_origins.remove(&id);
                 stack.extend(
                     self.taffy
-                        .children(id.into())
+                        .children(NodeId::from(id.as_u64()))
                         .expect(EXPECT_MESSAGE)
                         .into_iter()
-                        .map(LayoutId::from),
+                        .map(|id| LayoutId::from(u64::from(id))),
                 );
             }
         }
@@ -234,7 +258,7 @@ impl TaffyLayoutEngine {
 
         self.taffy
             .compute_layout_with_measure(
-                id.into(),
+                NodeId::from(id.as_u64()),
                 available_space.into(),
                 |known_dimensions, available_space, _id, node_context, _style| {
                     let Some(node_context) = node_context else {
@@ -347,14 +371,17 @@ impl TaffyLayoutEngine {
             return layout;
         }
 
-        let layout = self.taffy.layout(id.into()).expect(EXPECT_MESSAGE);
+        let layout = self
+            .taffy
+            .layout(NodeId::from(id.as_u64()))
+            .expect(EXPECT_MESSAGE);
         let layout_location = layout.location;
         let layout_size = layout.size;
-        let parent = self.taffy.parent(id.0);
+        let parent = self.taffy.parent(NodeId::from(id.as_u64()));
 
         let absolute_outer_origin = match parent {
             Some(parent_id) => {
-                let parent_id = LayoutId::from(parent_id);
+                let parent_id = LayoutId::from(u64::from(parent_id));
                 self.layout_bounds(parent_id, scale_factor);
                 let parent_origin = *self
                     .absolute_outer_origins
@@ -376,36 +403,6 @@ impl TaffyLayoutEngine {
         let bounds = (snapped_bounds / scale_factor).map(Pixels);
         self.absolute_layout_bounds.insert(id, bounds);
         bounds
-    }
-}
-
-/// A unique identifier for a layout node, generated when requesting a layout from Taffy
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-#[repr(transparent)]
-pub struct LayoutId(NodeId);
-
-impl LayoutId {
-    fn to_taffy_slice(node_ids: &[Self]) -> &[taffy::NodeId] {
-        // SAFETY: LayoutId is repr(transparent) to taffy::tree::NodeId.
-        unsafe { std::mem::transmute::<&[LayoutId], &[taffy::NodeId]>(node_ids) }
-    }
-}
-
-impl std::hash::Hash for LayoutId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        u64::from(self.0).hash(state);
-    }
-}
-
-impl From<NodeId> for LayoutId {
-    fn from(node_id: NodeId) -> Self {
-        Self(node_id)
-    }
-}
-
-impl From<LayoutId> for NodeId {
-    fn from(layout_id: LayoutId) -> NodeId {
-        layout_id.0
     }
 }
 
