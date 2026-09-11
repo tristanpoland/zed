@@ -61,6 +61,12 @@ pub trait SubscriptionHandle {
     fn detach(self);
 }
 
+/// The cancellation contract exposed by a scheduled task.
+pub trait TaskHandle<T> {
+    /// Detaches the task so it runs independently of this handle.
+    fn detach(self);
+}
+
 /// A global value that can be stored in an application context.
 pub trait Global: 'static {}
 

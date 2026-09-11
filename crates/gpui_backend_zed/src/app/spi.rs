@@ -1,15 +1,9 @@
 pub use gpui_types::{
     AppContextSpi, EntityHandle, EntityStorageSpi, StrongEntityHandle, SubscriptionHandle,
-    WeakEntityHandle,
+    TaskHandle, WeakEntityHandle,
 };
 
 use crate::{AnyEntity, AnyWeakEntity, App, Entity, EntityId, Subscription, Task, WeakEntity};
-
-/// The cancellation contract exposed by a scheduled task.
-pub trait TaskHandle<T> {
-    /// Detaches the task so it runs independently of this handle.
-    fn detach(self);
-}
 
 impl AppContextSpi for App {
     fn entity_storage(&self) -> &dyn EntityStorageSpi {
