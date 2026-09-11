@@ -68,7 +68,7 @@ use crate::{
     ClipboardReadError, CursorStyle, DispatchPhase, DisplayId, EventEmitter, ExternalDragPayload,
     FocusHandle, FocusMap, ForegroundExecutor, Global, KeyBinding, KeyContext, Keymap, Keystroke,
     LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform, PlatformDisplay,
-    PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformKeyboardSpi, Point, Priority,
+    PlatformKeyboardLayout, PlatformKeyboardMapper, Point, Priority,
     PromptBuilder, PromptButton, PromptHandle, PromptLevel, Render, RenderImage,
     RenderablePromptHandle, Reservation, ScreenCaptureSource, SharedString, SubscriberSet,
     Subscription, SvgRenderer, SystemNotification, SystemNotificationResponse, Task,
@@ -258,13 +258,10 @@ impl Application {
     {
         let this = self.0.clone();
         let platform = self.0.borrow().platform.clone();
-        crate::PlatformApplicationSpi::run(
-            platform.as_ref(),
-            Box::new(move || {
-                let cx = &mut *this.borrow_mut();
-                on_finish_launching(cx);
-            }),
-        );
+        platform.run(Box::new(move || {
+            let cx = &mut *this.borrow_mut();
+            on_finish_launching(cx);
+        }));
     }
 
     /// Start the application for an embedder that drives the run loop itself.
@@ -282,13 +279,10 @@ impl Application {
     {
         let this = self.0.clone();
         let platform = self.0.borrow().platform.clone();
-        crate::PlatformApplicationSpi::run(
-            platform.as_ref(),
-            Box::new(move || {
-                let cx = &mut *this.borrow_mut();
-                on_finish_launching(cx);
-            }),
-        );
+        platform.run(Box::new(move || {
+            let cx = &mut *this.borrow_mut();
+            on_finish_launching(cx);
+        }));
         ApplicationHandle { app: self.0 }
     }
 
@@ -298,7 +292,7 @@ impl Application {
     where
         F: 'static + FnMut(Vec<String>),
     {
-        crate::PlatformUrlSpi::on_open_urls(self.0.borrow().platform.as_ref(), Box::new(callback));
+        self.0.borrow().platform.on_open_urls(Box::new(callback));
         self
     }
 
@@ -309,14 +303,11 @@ impl Application {
         F: 'static + FnMut(&mut App),
     {
         let this = Rc::downgrade(&self.0);
-        crate::PlatformApplicationSpi::on_reopen(
-            self.0.borrow_mut().platform.as_ref(),
-            Box::new(move || {
-                if let Some(app) = this.upgrade() {
-                    callback(&mut app.borrow_mut());
-                }
-            }),
-        );
+        self.0.borrow_mut().platform.on_reopen(Box::new(move || {
+            if let Some(app) = this.upgrade() {
+                callback(&mut app.borrow_mut());
+            }
+        }));
         self
     }
 
@@ -824,8 +815,8 @@ impl App {
 
         let text_system = Arc::new(TextSystem::new(platform.text_system()));
         let entities = EntityMap::new();
-        let keyboard_layout = PlatformKeyboardSpi::keyboard_layout(platform.as_ref());
-        let keyboard_mapper = PlatformKeyboardSpi::keyboard_mapper(platform.as_ref());
+        let keyboard_layout = platform.keyboard_layout();
+        let keyboard_mapper = platform.keyboard_mapper();
 
         #[cfg(any(test, feature = "leak-detection"))]
         let _ref_counts = entities.ref_counts_drop_handle();
@@ -908,24 +899,19 @@ impl App {
         init_app_menus(platform.as_ref(), &app.borrow());
         SystemWindowTabController::init(&mut app.borrow_mut());
 
-        PlatformKeyboardSpi::on_keyboard_layout_change(
-            platform.as_ref(),
-            Box::new({
-                let app = Rc::downgrade(&app);
-                move || {
-                    if let Some(app) = app.upgrade() {
-                        let cx = &mut app.borrow_mut();
-                        cx.keyboard_layout =
-                            PlatformKeyboardSpi::keyboard_layout(cx.platform.as_ref());
-                        cx.keyboard_mapper =
-                            PlatformKeyboardSpi::keyboard_mapper(cx.platform.as_ref());
-                        cx.keyboard_layout_observers
-                            .clone()
-                            .retain(&(), move |callback| (callback)(cx));
-                    }
+        platform.on_keyboard_layout_change(Box::new({
+            let app = Rc::downgrade(&app);
+            move || {
+                if let Some(app) = app.upgrade() {
+                    let cx = &mut app.borrow_mut();
+                    cx.keyboard_layout = cx.platform.keyboard_layout();
+                    cx.keyboard_mapper = cx.platform.keyboard_mapper();
+                    cx.keyboard_layout_observers
+                        .clone()
+                        .retain(&(), move |callback| (callback)(cx));
                 }
-            }),
-        );
+            }
+        }));
 
         platform.on_thermal_state_change(Box::new({
             let app = Rc::downgrade(&app);
@@ -939,43 +925,37 @@ impl App {
             }
         }));
 
-        crate::PlatformApplicationSpi::on_system_wake(
-            platform.as_ref(),
-            Box::new({
-                let app = Rc::downgrade(&app);
-                move || {
-                    if let Some(app) = app.upgrade() {
-                        let cx = &mut app.borrow_mut();
-                        cx.system_wake_observers
-                            .clone()
-                            .retain(&(), move |callback| (callback)(cx));
-                    }
+        platform.on_system_wake(Box::new({
+            let app = Rc::downgrade(&app);
+            move || {
+                if let Some(app) = app.upgrade() {
+                    let cx = &mut app.borrow_mut();
+                    cx.system_wake_observers
+                        .clone()
+                        .retain(&(), move |callback| (callback)(cx));
                 }
-            }),
-        );
+            }
+        }));
 
-        crate::PlatformApplicationSpi::on_quit(
-            platform.as_ref(),
-            Box::new({
-                let cx = Rc::downgrade(&app);
-                move || {
-                    let Some(cx) = cx.upgrade() else {
-                        return true;
-                    };
-                    match cx.try_borrow_mut() {
-                        Ok(mut cx) => {
-                            cx.shutdown();
-                            true
-                        }
-                        Err(_) => {
-                            // Quit was requested while the AppCell was borrowed, so we can't shut down synchronously.
-                            // The platform decides how to proceed.
-                            false
-                        }
+        platform.on_quit(Box::new({
+            let cx = Rc::downgrade(&app);
+            move || {
+                let Some(cx) = cx.upgrade() else {
+                    return true;
+                };
+                match cx.try_borrow_mut() {
+                    Ok(mut cx) => {
+                        cx.shutdown();
+                        true
+                    }
+                    Err(_) => {
+                        // Quit was requested while the AppCell was borrowed, so we can't shut down synchronously.
+                        // The platform decides how to proceed.
+                        false
                     }
                 }
-            }),
-        );
+            }
+        }));
 
         app
     }
@@ -1071,7 +1051,7 @@ impl App {
 
     /// Gracefully quit the application via the platform's standard routine.
     pub fn quit(&self) {
-        crate::PlatformApplicationSpi::quit(self.platform.as_ref());
+        self.platform.quit();
     }
 
     /// Returns the current policy for hiding the cursor in response to
@@ -1092,7 +1072,7 @@ impl App {
     ///
     /// See [`App::set_cursor_hide_mode`].
     pub fn is_cursor_visible(&self) -> bool {
-        crate::PlatformCursorSpi::is_cursor_visible(self.platform.as_ref())
+        self.platform.is_cursor_visible()
     }
 
     /// Returns whether non-essential animations (e.g. loading spinners) should
@@ -1341,22 +1321,22 @@ impl App {
 
     /// Instructs the platform to activate the application by bringing it to the foreground.
     pub fn activate(&self, ignoring_other_apps: bool) {
-        crate::PlatformApplicationSpi::activate(self.platform.as_ref(), ignoring_other_apps);
+        self.platform.activate(ignoring_other_apps);
     }
 
     /// Hide the application at the platform level.
     pub fn hide(&self) {
-        crate::PlatformApplicationSpi::hide(self.platform.as_ref());
+        self.platform.hide();
     }
 
     /// Hide other applications at the platform level.
     pub fn hide_other_apps(&self) {
-        crate::PlatformApplicationSpi::hide_other_apps(self.platform.as_ref());
+        self.platform.hide_other_apps();
     }
 
     /// Unhide other applications at the platform level.
     pub fn unhide_other_apps(&self) {
-        crate::PlatformApplicationSpi::unhide_other_apps(self.platform.as_ref());
+        self.platform.unhide_other_apps();
     }
 
     /// Returns the list of currently active displays.
@@ -1457,7 +1437,7 @@ impl App {
 
     /// Reads data from the platform clipboard.
     pub fn read_from_clipboard(&self) -> Option<ClipboardItem> {
-        crate::PlatformClipboardSpi::read_from_clipboard(self.platform.as_ref())
+        self.platform.read_from_clipboard()
     }
 
     /// Reads data from the platform clipboard, resolving once the contents
@@ -1470,9 +1450,7 @@ impl App {
     pub fn read_from_clipboard_async(
         &self,
     ) -> Task<Result<Option<ClipboardItem>, ClipboardReadError>> {
-        <dyn Platform as crate::PlatformServicesSpi>::read_from_clipboard_async(
-            self.platform.as_ref(),
-        )
+        self.platform.read_from_clipboard_async()
     }
 
     /// Sets the text rendering mode for the application.
@@ -1487,26 +1465,26 @@ impl App {
 
     /// Writes data to the platform clipboard.
     pub fn write_to_clipboard(&self, item: ClipboardItem) {
-        crate::PlatformClipboardSpi::write_to_clipboard(self.platform.as_ref(), item)
+        self.platform.write_to_clipboard(item)
     }
 
     /// Clears the platform clipboard.
     pub fn clear_clipboard(&self) {
-        crate::PlatformClipboardSpi::clear_clipboard(self.platform.as_ref())
+        self.platform.clear_clipboard()
     }
 
     /// Reads data from the primary selection buffer.
     /// Only available on Linux.
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     pub fn read_from_primary(&self) -> Option<ClipboardItem> {
-        <dyn Platform as crate::PlatformServicesSpi>::read_from_primary(self.platform.as_ref())
+        self.platform.read_from_primary()
     }
 
     /// Writes data to the primary selection buffer.
     /// Only available on Linux.
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     pub fn write_to_primary(&self, item: ClipboardItem) {
-        <dyn Platform as crate::PlatformServicesSpi>::write_to_primary(self.platform.as_ref(), item)
+        self.platform.write_to_primary(item)
     }
 
     /// Reads data from macOS's "Find" pasteboard.
@@ -1516,9 +1494,7 @@ impl App {
     /// https://developer.apple.com/documentation/appkit/nspasteboard/name-swift.struct/find
     #[cfg(target_os = "macos")]
     pub fn read_from_find_pasteboard(&self) -> Option<ClipboardItem> {
-        <dyn Platform as crate::PlatformServicesSpi>::read_from_find_pasteboard(
-            self.platform.as_ref(),
-        )
+        self.platform.read_from_find_pasteboard()
     }
 
     /// Writes data to macOS's "Find" pasteboard.
@@ -1528,10 +1504,7 @@ impl App {
     /// https://developer.apple.com/documentation/appkit/nspasteboard/name-swift.struct/find
     #[cfg(target_os = "macos")]
     pub fn write_to_find_pasteboard(&self, item: ClipboardItem) {
-        <dyn Platform as crate::PlatformServicesSpi>::write_to_find_pasteboard(
-            self.platform.as_ref(),
-            item,
-        )
+        self.platform.write_to_find_pasteboard(item)
     }
 
     /// Writes credentials to the platform keychain.
@@ -1541,27 +1514,22 @@ impl App {
         username: &str,
         password: &[u8],
     ) -> Task<Result<()>> {
-        crate::PlatformCredentialsSpi::write_credentials(
-            self.platform.as_ref(),
-            url,
-            username,
-            password,
-        )
+        self.platform.write_credentials(url, username, password)
     }
 
     /// Reads credentials from the platform keychain.
     pub fn read_credentials(&self, url: &str) -> Task<Result<Option<(String, Vec<u8>)>>> {
-        crate::PlatformCredentialsSpi::read_credentials(self.platform.as_ref(), url)
+        self.platform.read_credentials(url)
     }
 
     /// Deletes credentials from the platform keychain.
     pub fn delete_credentials(&self, url: &str) -> Task<Result<()>> {
-        crate::PlatformCredentialsSpi::delete_credentials(self.platform.as_ref(), url)
+        self.platform.delete_credentials(url)
     }
 
     /// Directs the platform's default browser to open the given URL.
     pub fn open_url(&self, url: &str) {
-        crate::PlatformUrlSpi::open_url(self.platform.as_ref(), url);
+        self.platform.open_url(url);
     }
 
     /// Registers the given URL scheme (e.g. `zed` for `zed://` urls) to be
@@ -1571,7 +1539,7 @@ impl App {
     /// as part of app distribution, but this method exists to let you register
     /// schemes at runtime.
     pub fn register_url_scheme(&self, scheme: &str) -> Task<Result<()>> {
-        crate::PlatformUrlSpi::register_url_scheme(self.platform.as_ref(), scheme)
+        self.platform.register_url_scheme(scheme)
     }
 
     /// Sets the application's process-wide identity and user-visible name.
@@ -1581,7 +1549,7 @@ impl App {
     /// presents the application to the user. Call this once, early in startup,
     /// before opening windows or posting notifications.
     pub fn set_app_identity(&self, identifier: &str, name: &str) {
-        crate::PlatformApplicationSpi::set_app_identity(self.platform.as_ref(), identifier, name);
+        self.platform.set_app_identity(identifier, name);
     }
 
     /// Posts a notification to the operating system's notification center.
@@ -1591,10 +1559,7 @@ impl App {
     /// No-op on platforms without notification support, or when delivery is
     /// unavailable (e.g. authorization was denied).
     pub fn show_system_notification(&self, notification: SystemNotification) {
-        crate::PlatformSystemNotificationSpi::show_system_notification(
-            self.platform.as_ref(),
-            notification,
-        );
+        self.platform.show_system_notification(notification);
     }
 
     /// Removes the delivered or pending notification with this tag.
@@ -1602,10 +1567,7 @@ impl App {
     /// Best-effort: some platforms cannot retract a notification once shown,
     /// in which case it ages out of the notification center on its own.
     pub fn dismiss_system_notification(&self, tag: &str) {
-        crate::PlatformSystemNotificationSpi::dismiss_system_notification(
-            self.platform.as_ref(),
-            tag,
-        );
+        self.platform.dismiss_system_notification(tag);
     }
 
     /// Registers the handler invoked when the user activates a system
@@ -1616,36 +1578,31 @@ impl App {
         F: 'static + FnMut(SystemNotificationResponse, &mut App),
     {
         let this = self.this.clone();
-        crate::PlatformSystemNotificationSpi::on_system_notification_response(
-            self.platform.as_ref(),
-            Box::new(move |response| {
+        self.platform
+            .on_system_notification_response(Box::new(move |response| {
                 if let Some(app) = this.upgrade() {
                     callback(response, &mut app.borrow_mut());
                 }
-            }),
-        );
+            }));
     }
 
     /// Returns the full pathname of the current app bundle.
     ///
     /// Returns an error if the app is not being run from a bundle.
     pub fn app_path(&self) -> Result<PathBuf> {
-        <dyn Platform as crate::PlatformServicesSpi>::app_path(self.platform.as_ref())
+        self.platform.app_path()
     }
 
     /// On Linux, returns the name of the compositor in use.
     ///
     /// Returns an empty string on other platforms.
     pub fn compositor_name(&self) -> &'static str {
-        <dyn Platform as crate::PlatformServicesSpi>::compositor_name(self.platform.as_ref())
+        self.platform.compositor_name()
     }
 
     /// Returns the file URL of the executable with the specified name in the application bundle
     pub fn path_for_auxiliary_executable(&self, name: &str) -> Result<PathBuf> {
-        <dyn Platform as crate::PlatformServicesSpi>::path_for_auxiliary_executable(
-            self.platform.as_ref(),
-            name,
-        )
+        self.platform.path_for_auxiliary_executable(name)
     }
 
     /// Displays a platform modal for selecting paths.
@@ -1657,7 +1614,7 @@ impl App {
         &self,
         options: PathPromptOptions,
     ) -> oneshot::Receiver<Result<Option<Vec<PathBuf>>>> {
-        crate::PlatformPathSpi::prompt_for_paths(self.platform.as_ref(), options)
+        self.platform.prompt_for_paths(options)
     }
 
     /// Displays a platform modal for selecting a new path where a file can be saved.
@@ -1671,28 +1628,22 @@ impl App {
         directory: &Path,
         suggested_name: Option<&str>,
     ) -> oneshot::Receiver<Result<Option<PathBuf>>> {
-        crate::PlatformPathSpi::prompt_for_new_path(
-            self.platform.as_ref(),
-            directory,
-            suggested_name,
-        )
+        self.platform.prompt_for_new_path(directory, suggested_name)
     }
 
     /// Reveals the specified path at the platform level, such as in Finder on macOS.
     pub fn reveal_path(&self, path: &Path) {
-        crate::PlatformPathSpi::reveal_path(self.platform.as_ref(), path)
+        self.platform.reveal_path(path)
     }
 
     /// Opens the specified path with the system's default application.
     pub fn open_with_system(&self, path: &Path) {
-        crate::PlatformPathSpi::open_with_system(self.platform.as_ref(), path)
+        self.platform.open_with_system(path)
     }
 
     /// Returns whether the user has configured scrollbars to auto-hide at the platform level.
     pub fn should_auto_hide_scrollbars(&self) -> bool {
-        <dyn Platform as crate::PlatformServicesSpi>::should_auto_hide_scrollbars(
-            self.platform.as_ref(),
-        )
+        self.platform.should_auto_hide_scrollbars()
     }
 
     /// Restarts the application.
@@ -1700,8 +1651,7 @@ impl App {
         self.restart_observers
             .clone()
             .retain(&(), |observer| observer(self));
-        crate::PlatformApplicationSpi::restart(
-            self.platform.as_ref(),
+        self.platform.restart(
             self.restart_path.take(),
             std::mem::take(&mut self.restart_arguments),
         )
@@ -2810,7 +2760,7 @@ impl App {
 
     /// Returns `true` if the platform file picker supports selecting a mix of files and directories.
     pub fn can_select_mixed_files_and_dirs(&self) -> bool {
-        crate::PlatformPathSpi::can_select_mixed_files_and_dirs(self.platform.as_ref())
+        self.platform.can_select_mixed_files_and_dirs()
     }
 
     /// Removes an image from the sprite atlas on all windows.

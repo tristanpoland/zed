@@ -12,11 +12,11 @@ use crate::{
     EntityId, EventEmitter, FileDropEvent, FontId, Global, GlobalElementId, GlyphId, GpuSpecs,
     Hsla, InputHandler, IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke,
     KeystrokeEvent, LayoutId, LineLayoutIndex, Modifiers, ModifiersChangedEvent, MonochromeSprite,
-    MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAccessibilitySpi,
-    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformTextInputSpi,
-    PlatformWindow, Point, PolychromeSprite, Priority, PromptButton, PromptLevel, Quad, Render,
-    RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge,
-    SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow,
+    MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAtlas,
+    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PolychromeSprite,
+    Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams, RenderImage,
+    RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
+    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow,
     SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription,
     SystemWindowTab, SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task,
     TextInputConfiguration, TextInputStateChange, TextRenderingMode, TextStyle,
@@ -1605,31 +1605,28 @@ impl Window {
             let (action_sender, action_receiver) =
                 async_channel::unbounded::<accesskit::ActionRequest>();
 
-            PlatformAccessibilitySpi::a11y_init(
-                platform_window.as_ref(),
-                crate::A11yCallbacks {
-                    activation: {
-                        let active_flag = a11y_active_flag.clone();
-                        Box::new(move || {
-                            log::info!("Accessibility activated");
-                            active_flag.store(true, SeqCst);
-                            activation_sender.send_blocking(()).log_err();
-                            Some(initial_tree.clone())
-                        })
-                    },
-                    action: Box::new(move |request| {
-                        action_sender.send_blocking(request).log_err();
-                    }),
-                    deactivation: {
-                        let active_flag = a11y_active_flag.clone();
-                        Box::new(move || {
-                            log::info!("Accessibility deactivated");
-                            active_flag.store(false, SeqCst);
-                            deactivation_sender.send_blocking(()).log_err();
-                        })
-                    },
+            platform_window.a11y_init(crate::A11yCallbacks {
+                activation: {
+                    let active_flag = a11y_active_flag.clone();
+                    Box::new(move || {
+                        log::info!("Accessibility activated");
+                        active_flag.store(true, SeqCst);
+                        activation_sender.send_blocking(()).log_err();
+                        Some(initial_tree.clone())
+                    })
                 },
-            );
+                action: Box::new(move |request| {
+                    action_sender.send_blocking(request).log_err();
+                }),
+                deactivation: {
+                    let active_flag = a11y_active_flag.clone();
+                    Box::new(move || {
+                        log::info!("Accessibility deactivated");
+                        active_flag.store(false, SeqCst);
+                        deactivation_sender.send_blocking(()).log_err();
+                    })
+                },
+            });
 
             // A11y can be activated at any time, and so we cannot compute a
             // correct `TreeUpdate` on-demand. When this happens, we return a
@@ -2620,7 +2617,7 @@ impl Window {
         self.display_id = self.platform_window.display().map(|display| display.id());
         self.mouse_position = self.platform_window.mouse_position();
 
-        PlatformAccessibilitySpi::a11y_update_window_bounds(self.platform_window.as_ref());
+        self.platform_window.a11y_update_window_bounds();
         self.refresh();
 
         self.bounds_observers
@@ -3166,14 +3163,12 @@ impl Window {
         self.apply_text_input_configuration(cx);
         if focused_text_input_active != self.focused_text_input_active {
             self.focused_text_input_active = focused_text_input_active;
-            PlatformTextInputSpi::text_input_state_changed(
-                self.platform_window.as_ref(),
-                if focused_text_input_active {
+            self.platform_window
+                .text_input_state_changed(if focused_text_input_active {
                     TextInputStateChange::FocusGained
                 } else {
                     TextInputStateChange::FocusLost
-                },
-            );
+                });
         }
 
         self.layout_engine.as_mut().unwrap().clear();
@@ -3453,10 +3448,7 @@ impl Window {
                     "Sending a11y tree update: {} nodes",
                     tree_update.nodes.len()
                 );
-                PlatformAccessibilitySpi::a11y_tree_update(
-                    self.platform_window.as_ref(),
-                    tree_update,
-                );
+                self.platform_window.a11y_tree_update(tree_update);
             }
         }
     }
@@ -5097,10 +5089,8 @@ impl Window {
             None => TextInputConfiguration::default(),
         };
         if self.last_text_input_configuration.as_ref() != Some(&configuration) {
-            PlatformTextInputSpi::set_text_input_configuration(
-                self.platform_window.as_mut(),
-                configuration.clone(),
-            );
+            self.platform_window
+                .set_text_input_configuration(configuration.clone());
             self.last_text_input_configuration = Some(configuration);
         }
     }
@@ -5223,7 +5213,7 @@ impl Window {
                 .rendered_frame
                 .cursor_style(self)
                 .unwrap_or(CursorStyle::Arrow);
-            crate::PlatformCursorSpi::set_cursor_style(cx.platform.as_ref(), style);
+            cx.platform.set_cursor_style(style);
         }
     }
 
@@ -5715,7 +5705,7 @@ impl Window {
                     CursorHideMode::OnTyping | CursorHideMode::OnTypingAndAction
                 )
             {
-                crate::PlatformCursorSpi::hide_cursor_until_mouse_moves(cx.platform.as_ref());
+                cx.platform.hide_cursor_until_mouse_moves();
             }
         }
 
@@ -6122,7 +6112,7 @@ impl Window {
             && cx.cursor_hide_mode == CursorHideMode::OnTypingAndAction
             && self.last_input_was_keyboard()
         {
-            crate::PlatformCursorSpi::hide_cursor_until_mouse_moves(cx.platform.as_ref());
+            cx.platform.hide_cursor_until_mouse_moves();
         }
     }
 
