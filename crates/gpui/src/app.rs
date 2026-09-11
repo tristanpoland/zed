@@ -1,3 +1,25 @@
+//! The application and entity runtime is kept concrete in this crate until
+//! its public type boundary can be split without changing the API.
+//!
+//! The exact blockers are the public callback signatures that tie these
+//! symbols together: [`App`], [`Context`], [`AsyncApp`], [`AsyncWindowContext`],
+//! [`Entity`], [`WeakEntity`], [`AnyEntity`], [`AnyWeakEntity`],
+//! [`GpuiBorrow`], [`Task`], [`Subscription`], and [`Window`]. For example,
+//! [`AppContext::new`] takes `FnOnce(&mut Context<T>) -> T`, while
+//! [`Entity::update`] and [`AsyncApp::spawn`] expose callbacks containing
+//! `Context<T>`, `AsyncApp`, and `Window`. Those types are also used directly
+//! by the implementation modules and by `view.rs`, `window.rs`,
+//! `executor.rs`, and `platform/app_menu.rs`.
+//!
+//! Moving the implementation to a separate backend while retaining these
+//! signatures would require `gpui` to name that backend's concrete types. That
+//! would add a backend dependency here or require a wholesale re-export.
+//! Replacing the types with trait objects or opaque handles would change
+//! constructors, callback ergonomics, and type identity. The real
+//! implementation therefore remains here as the documented symbol blocker,
+//! while the backend copy implements the same backend-neutral SPI in
+//! `gpui_types`.
+
 use scheduler::Instant;
 use std::{
     any::{Any, TypeId, type_name},

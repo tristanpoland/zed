@@ -3,7 +3,7 @@ pub use gpui_types::{
     TaskHandle, WeakEntityHandle,
 };
 
-use crate::{AnyEntity, AnyWeakEntity, App, Entity, EntityId, Subscription, WeakEntity};
+use crate::{AnyEntity, AnyWeakEntity, App, Entity, EntityId, Subscription, Task, WeakEntity};
 
 impl AppContextSpi for App {
     fn entity_storage(&self) -> &dyn EntityStorageSpi {
@@ -57,11 +57,18 @@ impl SubscriptionHandle for Subscription {
     }
 }
 
+impl<T> TaskHandle<T> for Task<T> {
+    fn detach(self) {
+        Task::detach(self)
+    }
+}
+
 const _: () = {
     const fn assert_app_context<T: AppContextSpi>() {}
     const fn assert_entity_handle<T: EntityHandle>() {}
     const fn assert_strong_entity_handle<T: StrongEntityHandle<()>>() {}
     const fn assert_weak_entity_handle<T: WeakEntityHandle<()>>() {}
+    const fn assert_task_handle<T: TaskHandle<()>>() {}
 
     assert_app_context::<App>();
     assert_entity_handle::<Entity<()>>();
@@ -70,4 +77,5 @@ const _: () = {
     assert_entity_handle::<AnyWeakEntity>();
     assert_strong_entity_handle::<Entity<()>>();
     assert_weak_entity_handle::<WeakEntity<()>>();
+    assert_task_handle::<Task<()>>();
 };
