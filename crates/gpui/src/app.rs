@@ -1564,7 +1564,10 @@ impl App {
     /// No-op on platforms without notification support, or when delivery is
     /// unavailable (e.g. authorization was denied).
     pub fn show_system_notification(&self, notification: SystemNotification) {
-        self.platform.show_system_notification(notification);
+        crate::PlatformSystemNotificationSpi::show_system_notification(
+            self.platform.as_ref(),
+            notification,
+        );
     }
 
     /// Removes the delivered or pending notification with this tag.
@@ -1572,7 +1575,10 @@ impl App {
     /// Best-effort: some platforms cannot retract a notification once shown,
     /// in which case it ages out of the notification center on its own.
     pub fn dismiss_system_notification(&self, tag: &str) {
-        self.platform.dismiss_system_notification(tag);
+        crate::PlatformSystemNotificationSpi::dismiss_system_notification(
+            self.platform.as_ref(),
+            tag,
+        );
     }
 
     /// Registers the handler invoked when the user activates a system
@@ -1583,12 +1589,14 @@ impl App {
         F: 'static + FnMut(SystemNotificationResponse, &mut App),
     {
         let this = self.this.clone();
-        self.platform
-            .on_system_notification_response(Box::new(move |response| {
+        crate::PlatformSystemNotificationSpi::on_system_notification_response(
+            self.platform.as_ref(),
+            Box::new(move |response| {
                 if let Some(app) = this.upgrade() {
                     callback(response, &mut app.borrow_mut());
                 }
-            }));
+            }),
+        );
     }
 
     /// Returns the full pathname of the current app bundle.

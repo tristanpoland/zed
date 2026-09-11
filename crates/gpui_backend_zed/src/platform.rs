@@ -77,7 +77,10 @@ use gpui_types::clipboard::{
 pub use gpui_types::clipboard::{
     ClipboardReadError, ClipboardString, ImageFormat, PlatformClipboardSpi,
 };
-pub use gpui_types::platform::{CursorStyle, PlatformCredentialsSpi, PlatformCursorSpi};
+pub use gpui_types::platform::{
+    CursorStyle, PlatformCredentialsSpi, PlatformCursorSpi, PlatformSystemNotificationSpi,
+    SystemNotification, SystemNotificationAction, SystemNotificationResponse,
+};
 /// A clipboard entry using GPUI's runtime image type.
 pub type ClipboardEntry = SharedClipboardEntry<Image>;
 /// A clipboard item using GPUI's runtime image type.
@@ -440,6 +443,23 @@ impl PlatformCredentialsSpi for dyn Platform {
     }
 }
 
+impl PlatformSystemNotificationSpi for dyn Platform {
+    fn show_system_notification(&self, notification: SystemNotification) {
+        Platform::show_system_notification(self, notification);
+    }
+
+    fn dismiss_system_notification(&self, tag: &str) {
+        Platform::dismiss_system_notification(self, tag);
+    }
+
+    fn on_system_notification_response(
+        &self,
+        callback: Box<dyn FnMut(SystemNotificationResponse)>,
+    ) {
+        Platform::on_system_notification_response(self, callback);
+    }
+}
+
 /// A handle to a platform's display, e.g. a monitor or laptop screen.
 pub trait PlatformDisplay: Debug {
     /// Get the ID for this display
@@ -469,43 +489,6 @@ pub trait PlatformDisplay: Debug {
         let origin = point(center.x - offset.width, center.y - offset.height);
         Bounds::new(origin, clipped_window_size)
     }
-}
-
-/// A notification posted to the operating system's notification center,
-/// rather than rendered as in-app UI.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SystemNotification {
-    /// Stable identity for the notification. Posting a new notification with
-    /// the same tag replaces the previous one where the platform supports it,
-    /// and responses carry the tag back to the application.
-    pub tag: SharedString,
-    /// The notification's headline.
-    pub title: SharedString,
-    /// Additional text displayed below the title.
-    pub body: SharedString,
-    /// Buttons offered on the notification. Platforms that cannot display
-    /// action buttons show the notification without them.
-    pub actions: Vec<SystemNotificationAction>,
-}
-
-/// A button offered on a [`SystemNotification`].
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct SystemNotificationAction {
-    /// Identifies the action in [`SystemNotificationResponse::action_id`]
-    /// when the user presses this button.
-    pub id: SharedString,
-    /// The button's user-visible label.
-    pub label: SharedString,
-}
-
-/// The user's activation of a [`SystemNotification`].
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SystemNotificationResponse {
-    /// The [`SystemNotification::tag`] of the activated notification.
-    pub tag: SharedString,
-    /// The pressed action button's [`SystemNotificationAction::id`], or
-    /// `None` when the user activated the notification body itself.
-    pub action_id: Option<SharedString>,
 }
 
 /// Thermal state of the system

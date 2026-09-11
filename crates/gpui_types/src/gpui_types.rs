@@ -416,6 +416,10 @@ pub mod platform {
         ExternalPaths, ImageFormat, PlatformClipboardSpi,
     };
     pub use crate::credentials::PlatformCredentialsSpi;
+    pub use crate::notifications::{
+        PlatformSystemNotificationSpi, SystemNotification, SystemNotificationAction,
+        SystemNotificationResponse,
+    };
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
     use std::fmt;
@@ -544,6 +548,7 @@ pub mod clipboard;
 pub mod context;
 pub mod credentials;
 pub mod entity;
+pub mod notifications;
 
 pub use clipboard::*;
 pub use color::*;
@@ -552,4 +557,5 @@ pub use credentials::*;
 pub use entity::*;
 pub use geometry::*;
 pub use input::*;
+pub use notifications::*;
 pub use platform::*;
