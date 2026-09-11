@@ -91,7 +91,7 @@ pub mod types {
         InvalidKeystrokeError, KeybindingKeystroke, Keystroke, Node, NodeId, Orientation,
         PathPromptOptions, PlatformAccessibilitySpi, PlatformApplicationSpi,
         PlatformCredentialsSpi, PlatformCursorSpi, PlatformKeyboardLayoutSpi,
-        PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi,
+        PlatformKeyboardMapperSpi, PlatformKeyboardSpi, PlatformPathSpi, PlatformServicesSpi,
         PlatformSystemNotificationSpi, PlatformTextInputSpi, PlatformUrlSpi, Role,
         StrongEntityHandle, SubscriptionHandle, SystemNotification, SystemNotificationAction,
         SystemNotificationResponse, TaskHandle, TextInputAction, TextInputConfiguration,

@@ -87,8 +87,8 @@ pub use gpui_types::input_method::{
 pub use gpui_types::paths::{PathPromptOptions, PlatformPathSpi};
 pub use gpui_types::platform::{
     AppLifecyclePhase, CursorStyle, PlatformApplicationSpi, PlatformCredentialsSpi,
-    PlatformCursorSpi, PlatformSystemNotificationSpi, SystemNotification, SystemNotificationAction,
-    SystemNotificationResponse,
+    PlatformCursorSpi, PlatformServicesSpi, PlatformSystemNotificationSpi, SystemNotification,
+    SystemNotificationAction, SystemNotificationResponse,
 };
 pub use gpui_types::urls::PlatformUrlSpi;
 pub use gpui_types::window::{
@@ -451,7 +451,7 @@ impl PlatformClipboardSpi for dyn Platform {
 }
 
 impl PlatformCredentialsSpi for dyn Platform {
-    type Task<T> = Task<T>;
+    type Task<R> = Task<R>;
     type Error = anyhow::Error;
 
     fn write_credentials(
@@ -493,7 +493,7 @@ impl PlatformSystemNotificationSpi for dyn Platform {
 }
 
 impl PlatformUrlSpi for dyn Platform {
-    type Task<T> = Task<T>;
+    type Task<R> = Task<R>;
     type Error = anyhow::Error;
 
     fn open_url(&self, url: &str) {
@@ -510,7 +510,7 @@ impl PlatformUrlSpi for dyn Platform {
 }
 
 impl PlatformPathSpi for dyn Platform {
-    type Task<T> = oneshot::Receiver<T>;
+    type Task<R> = oneshot::Receiver<R>;
     type Error = anyhow::Error;
 
     fn prompt_for_paths(
@@ -592,6 +592,67 @@ impl PlatformApplicationSpi for dyn Platform {
 
     fn set_app_identity(&self, identifier: &str, name: &str) {
         Platform::set_app_identity(self, identifier, name);
+    }
+}
+
+impl PlatformServicesSpi for dyn Platform {
+    type ClipboardTask<R> = Task<R>;
+
+    fn read_from_clipboard_async(
+        &self,
+    ) -> <Self as PlatformServicesSpi>::ClipboardTask<
+        Result<
+            Option<gpui_types::ClipboardItem<<Self as PlatformClipboardSpi>::Image>>,
+            ClipboardReadError,
+        >,
+    > {
+        Platform::read_from_clipboard_async(self)
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    fn read_from_primary(
+        &self,
+    ) -> Option<gpui_types::ClipboardItem<<Self as PlatformClipboardSpi>::Image>> {
+        Platform::read_from_primary(self)
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    fn write_to_primary(
+        &self,
+        item: gpui_types::ClipboardItem<<Self as PlatformClipboardSpi>::Image>,
+    ) {
+        Platform::write_to_primary(self, item);
+    }
+
+    #[cfg(target_os = "macos")]
+    fn read_from_find_pasteboard(
+        &self,
+    ) -> Option<gpui_types::ClipboardItem<<Self as PlatformClipboardSpi>::Image>> {
+        Platform::read_from_find_pasteboard(self)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn write_to_find_pasteboard(
+        &self,
+        item: gpui_types::ClipboardItem<<Self as PlatformClipboardSpi>::Image>,
+    ) {
+        Platform::write_to_find_pasteboard(self, item);
+    }
+
+    fn should_auto_hide_scrollbars(&self) -> bool {
+        Platform::should_auto_hide_scrollbars(self)
+    }
+
+    fn app_path(&self) -> Result<PathBuf> {
+        Platform::app_path(self)
+    }
+
+    fn path_for_auxiliary_executable(&self, name: &str) -> Result<PathBuf> {
+        Platform::path_for_auxiliary_executable(self, name)
+    }
+
+    fn compositor_name(&self) -> &'static str {
+        Platform::compositor_name(self)
     }
 }
 

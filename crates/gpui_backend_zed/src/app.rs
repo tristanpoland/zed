@@ -1448,7 +1448,9 @@ impl App {
     pub fn read_from_clipboard_async(
         &self,
     ) -> Task<Result<Option<ClipboardItem>, ClipboardReadError>> {
-        self.platform.read_from_clipboard_async()
+        <dyn Platform as crate::PlatformServicesSpi>::read_from_clipboard_async(
+            self.platform.as_ref(),
+        )
     }
 
     /// Sets the text rendering mode for the application.
@@ -1475,14 +1477,14 @@ impl App {
     /// Only available on Linux.
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     pub fn read_from_primary(&self) -> Option<ClipboardItem> {
-        self.platform.read_from_primary()
+        <dyn Platform as crate::PlatformServicesSpi>::read_from_primary(self.platform.as_ref())
     }
 
     /// Writes data to the primary selection buffer.
     /// Only available on Linux.
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     pub fn write_to_primary(&self, item: ClipboardItem) {
-        self.platform.write_to_primary(item)
+        <dyn Platform as crate::PlatformServicesSpi>::write_to_primary(self.platform.as_ref(), item)
     }
 
     /// Reads data from macOS's "Find" pasteboard.
@@ -1492,7 +1494,9 @@ impl App {
     /// https://developer.apple.com/documentation/appkit/nspasteboard/name-swift.struct/find
     #[cfg(target_os = "macos")]
     pub fn read_from_find_pasteboard(&self) -> Option<ClipboardItem> {
-        self.platform.read_from_find_pasteboard()
+        <dyn Platform as crate::PlatformServicesSpi>::read_from_find_pasteboard(
+            self.platform.as_ref(),
+        )
     }
 
     /// Writes data to macOS's "Find" pasteboard.
@@ -1502,7 +1506,10 @@ impl App {
     /// https://developer.apple.com/documentation/appkit/nspasteboard/name-swift.struct/find
     #[cfg(target_os = "macos")]
     pub fn write_to_find_pasteboard(&self, item: ClipboardItem) {
-        self.platform.write_to_find_pasteboard(item)
+        <dyn Platform as crate::PlatformServicesSpi>::write_to_find_pasteboard(
+            self.platform.as_ref(),
+            item,
+        )
     }
 
     /// Writes credentials to the platform keychain.
@@ -1601,19 +1608,22 @@ impl App {
     ///
     /// Returns an error if the app is not being run from a bundle.
     pub fn app_path(&self) -> Result<PathBuf> {
-        self.platform.app_path()
+        <dyn Platform as crate::PlatformServicesSpi>::app_path(self.platform.as_ref())
     }
 
     /// On Linux, returns the name of the compositor in use.
     ///
     /// Returns an empty string on other platforms.
     pub fn compositor_name(&self) -> &'static str {
-        self.platform.compositor_name()
+        <dyn Platform as crate::PlatformServicesSpi>::compositor_name(self.platform.as_ref())
     }
 
     /// Returns the file URL of the executable with the specified name in the application bundle
     pub fn path_for_auxiliary_executable(&self, name: &str) -> Result<PathBuf> {
-        self.platform.path_for_auxiliary_executable(name)
+        <dyn Platform as crate::PlatformServicesSpi>::path_for_auxiliary_executable(
+            self.platform.as_ref(),
+            name,
+        )
     }
 
     /// Displays a platform modal for selecting paths.
@@ -1658,7 +1668,9 @@ impl App {
 
     /// Returns whether the user has configured scrollbars to auto-hide at the platform level.
     pub fn should_auto_hide_scrollbars(&self) -> bool {
-        self.platform.should_auto_hide_scrollbars()
+        <dyn Platform as crate::PlatformServicesSpi>::should_auto_hide_scrollbars(
+            self.platform.as_ref(),
+        )
     }
 
     /// Restarts the application.

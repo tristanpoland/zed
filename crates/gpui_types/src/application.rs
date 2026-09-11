@@ -1,5 +1,15 @@
 use std::{ffi::OsString, path::PathBuf};
 
+use crate::{
+    clipboard::{ClipboardItem, ClipboardReadError, PlatformClipboardSpi},
+    credentials::PlatformCredentialsSpi,
+    keyboard::PlatformKeyboardSpi,
+    notifications::PlatformSystemNotificationSpi,
+    paths::PlatformPathSpi,
+    platform::PlatformCursorSpi,
+    urls::PlatformUrlSpi,
+};
+
 /// The application's lifecycle phase, as owned and reported by a mobile OS.
 ///
 /// `Inactive` means visible but not receiving input (a system dialog on
@@ -65,4 +75,61 @@ pub trait PlatformApplicationSpi {
 
     /// Sets the application's process-wide identity and user-visible name.
     fn set_app_identity(&self, _identifier: &str, _name: &str) {}
+}
+
+/// The application-level platform capabilities used by GPUI.
+///
+/// The capability traits provide the backend-neutral operation contracts. This
+/// composition adds the remaining platform services that are specific to the
+/// application boundary while keeping the runtime's task and clipboard image
+/// types associated with its implementation.
+pub trait PlatformServicesSpi:
+    PlatformApplicationSpi
+    + PlatformCursorSpi
+    + PlatformClipboardSpi
+    + PlatformCredentialsSpi
+    + PlatformSystemNotificationSpi
+    + PlatformUrlSpi
+    + PlatformPathSpi
+    + PlatformKeyboardSpi
+{
+    /// The task returned by asynchronous clipboard reads.
+    type ClipboardTask<T>;
+
+    /// Reads the clipboard, resolving once its contents are available.
+    fn read_from_clipboard_async(
+        &self,
+    ) -> Self::ClipboardTask<
+        Result<Option<ClipboardItem<<Self as PlatformClipboardSpi>::Image>>, ClipboardReadError>,
+    >;
+
+    /// Reads data from the primary selection buffer.
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    fn read_from_primary(&self) -> Option<ClipboardItem<<Self as PlatformClipboardSpi>::Image>>;
+
+    /// Writes data to the primary selection buffer.
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    fn write_to_primary(&self, item: ClipboardItem<<Self as PlatformClipboardSpi>::Image>);
+
+    /// Reads data from macOS's Find pasteboard.
+    #[cfg(target_os = "macos")]
+    fn read_from_find_pasteboard(
+        &self,
+    ) -> Option<ClipboardItem<<Self as PlatformClipboardSpi>::Image>>;
+
+    /// Writes data to macOS's Find pasteboard.
+    #[cfg(target_os = "macos")]
+    fn write_to_find_pasteboard(&self, item: ClipboardItem<<Self as PlatformClipboardSpi>::Image>);
+
+    /// Returns whether the platform file picker supports automatically hiding scrollbars.
+    fn should_auto_hide_scrollbars(&self) -> bool;
+
+    /// Returns the full pathname of the current application bundle.
+    fn app_path(&self) -> anyhow::Result<PathBuf>;
+
+    /// Returns the path of an auxiliary executable in the application bundle.
+    fn path_for_auxiliary_executable(&self, name: &str) -> anyhow::Result<PathBuf>;
+
+    /// Returns the name of the compositor in use, when applicable.
+    fn compositor_name(&self) -> &'static str;
 }

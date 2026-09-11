@@ -594,7 +594,7 @@ pub mod input {
 }
 
 pub mod platform {
-    pub use crate::application::{AppLifecyclePhase, PlatformApplicationSpi};
+    pub use crate::application::{AppLifecyclePhase, PlatformApplicationSpi, PlatformServicesSpi};
     pub use crate::clipboard::{
         ClipboardEntry, ClipboardImage, ClipboardItem, ClipboardReadError, ClipboardString,
         ExternalPaths, ImageFormat, PlatformClipboardSpi,
