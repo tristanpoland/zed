@@ -5,13 +5,80 @@ use futures::prelude::*;
 use gpui_util::{TryFutureExt, TryFutureExtBacktrace};
 use scheduler::Instant;
 use scheduler::Scheduler;
-use std::{future::Future, marker::PhantomData, rc::Rc, sync::Arc, time::Duration};
 #[cfg(not(target_family = "wasm"))]
-use std::{mem, pin::Pin};
+use std::mem;
+use std::{
+    any::Any,
+    future::Future,
+    marker::PhantomData,
+    pin::Pin,
+    rc::Rc,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
 
 pub use scheduler::{
-    DedicatedExecutor, FallibleTask, LocalExecutor as SchedulerLocalExecutor, Priority, Task,
+    DedicatedExecutor, FallibleTask, LocalExecutor as SchedulerLocalExecutor, Priority,
 };
+
+/// A task scheduled by a GPUI executor.
+#[must_use]
+pub struct Task<T>(scheduler::Task<T>);
+
+impl<T> Task<T> {
+    /// Creates a task that is ready with the given value.
+    pub fn ready(value: T) -> Self {
+        Self(scheduler::Task::ready(value))
+    }
+
+    /// Creates a task from an `async_task::Task`.
+    pub fn from_async_task(task: async_task::Task<T, scheduler::RunnableMeta>) -> Self {
+        Self(scheduler::Task::from_async_task(task))
+    }
+
+    /// Returns whether this task has completed.
+    pub fn is_ready(&self) -> bool {
+        self.0.is_ready()
+    }
+
+    /// Detaches this task so it runs independently of its handle.
+    pub fn detach(self) {
+        self.0.detach();
+    }
+
+    /// Converts this task into a fallible task that returns `Option<T>`.
+    pub fn fallible(self) -> FallibleTask<T> {
+        self.0.fallible()
+    }
+}
+
+impl<T> From<scheduler::Task<T>> for Task<T> {
+    fn from(task: scheduler::Task<T>) -> Self {
+        Self(task)
+    }
+}
+
+impl<T> std::fmt::Debug for Task<T> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl<T: 'static> Future for Task<T> {
+    type Output = T;
+
+    fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
+        unsafe { self.map_unchecked_mut(|task| &mut task.0) }.poll(context)
+    }
+}
+
+impl Task<Box<dyn Any + Send + Sync>> {
+    /// Reinterprets the boxed output as a concrete `T` when the task completes.
+    pub fn downcast<T: Send + Sync + 'static>(self) -> Task<T> {
+        Task(self.0.downcast())
+    }
+}
 
 /// A pointer to the executor that is currently running,
 /// for spawning background tasks.
@@ -116,7 +183,7 @@ impl BackgroundExecutor {
         Fut: Future + 'static,
         Fut::Output: Send + Sync + 'static,
     {
-        self.inner.spawn_dedicated(f)
+        self.inner.spawn_dedicated(f).into()
     }
 
     /// Enqueues the given future to be run to completion on a background thread.
@@ -142,9 +209,9 @@ impl BackgroundExecutor {
         R: Send + 'static,
     {
         if priority == Priority::RealtimeAudio {
-            self.inner.spawn_realtime(future)
+            self.inner.spawn_realtime(future).into()
         } else {
-            self.inner.spawn_with_priority(priority, future)
+            self.inner.spawn_with_priority(priority, future).into()
         }
     }
 
@@ -367,7 +434,7 @@ impl ForegroundExecutor {
     where
         R: 'static,
     {
-        self.inner.spawn(future.boxed_local())
+        self.inner.spawn(future.boxed_local()).into()
     }
 
     /// Enqueues the given Task to run on the main thread with the given priority.
@@ -381,7 +448,7 @@ impl ForegroundExecutor {
         R: 'static,
     {
         // Priority is ignored for foreground tasks - they run in order on the main thread
-        self.inner.spawn(future)
+        self.inner.spawn(future).into()
     }
 
     /// On platforms with dedicated support, enqueues the given future to run
@@ -413,6 +480,7 @@ impl ForegroundExecutor {
                 }
                 dispatcher.dispatch_on_main_thread_when_idle(runnable, timeout);
             })
+            .into()
     }
 
     /// The time remaining in the current idle slice, when called from a task
